@@ -1,0 +1,6 @@
+# batch 실행에 필요한 Python 라이브러리
+# 버전 고정은 첫 실행이 되고 나서 합니다 (지금 고정하면 맞는 버전인지 확인할 수 없음)
+
+requests
+python-dotenv
+supabase

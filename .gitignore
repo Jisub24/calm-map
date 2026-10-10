@@ -1,0 +1,47 @@
+# ---- 키 · 비밀값 ----
+.env
+.env.*
+!.env.example
+local.properties
+*.keystore
+*.jks
+
+# ---- 녹음 파일 (원음은 절대 올리지 않음) ----
+analysis/recordings/*
+!analysis/recordings/.gitkeep
+*.wav
+*.m4a
+*.mp3
+*.aac
+*.3gp
+
+# ---- Android ----
+.gradle/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+.idea/
+*.iml
+
+# ---- Python ----
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# ---- Web ----
+node_modules/
+dist/
+.vercel/
+
+# ---- Supabase ----
+supabase/.temp/
+supabase/.branches/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
