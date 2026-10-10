@@ -77,7 +77,11 @@ calm-map/
 - 커밋 메시지는 `태그: 무엇 - 어떤 작업` 형태. 예) `Design: 메인 페이지 - nav바 스타일 지정`
   - 태그: `Feat` 새 기능 / `Fix` 버그 수정 / `Refactor` 리팩토링 / `Modify` 로직 일부 변경 / `Style` 포맷팅 / `Docs` 문서 / `Test` 테스트 / `Design` UI·UX / `Comment` 주석 / `Chore` 빌드·설정·CI / `Rename` 이름 변경 / `Remove` 파일 삭제 / `Build` 라이브러리 추가 / `Merge` 병합
 - 저장소가 공개다. 키(`.env`, `local.properties`)와 녹음 파일이 커밋에 섞이지 않았는지 매번 확인한다.
-- 이슈 · PR 제목 규칙은 추후 확정.
+- 이슈 제목은 `[타입]: 페이지 이름 - 상세 내용`. 예) `[Design]: 메인 페이지 - nav바 스타일 지정`
+- 브랜치 이름은 `타입-이슈번호-페이지이름-작업종류` (타입 소문자). 예) `feat-01-main-markup`
+  - 작업 종류: `markup` `css`(사업장 웹) / `func`(기능) / `ui`(앱 화면 — Compose는 마크업 · 스타일 구분이 없음) / `setup`(환경 · 설정)
+- **커밋 메시지와 PR 본문에 `Co-Authored-By: Claude` 같은 AI 귀속 줄을 넣지 않는다.** 공개 저장소이고 공모전 출품작이다.
+- PR 제목 규칙은 추후 확정.
 
 ## 역할
 

@@ -29,7 +29,7 @@
 
 ```
 이슈 생성  →  브랜치 생성  →  작업 · commit · push  →  PR 올림  →  승인  →  main 머지
-   #12       feature/12-...                            (내용 검토)
+   #12        feat-12-map-ui                           (내용 검토)
 ```
 
 | 용어 | 뜻 |
@@ -47,14 +47,14 @@ git switch main
 git pull
 
 # 2. 이슈용 브랜치 만들기
-git switch -c feature/12-지도-화면
+git switch -c feat-12-map-ui
 
 # 3. 작업하고 커밋 (메시지 규칙은 아래)
 git add .
 git commit -m "Feat: 지도 화면 - 장소 표시 3단계"
 
 # 4. 올리기 (그 브랜치를 처음 올릴 때만 -u 가 필요하다)
-git push -u origin feature/12-지도-화면
+git push -u origin feat-12-map-ui
 
 # 5. PR 올리기
 gh pr create --fill
@@ -63,6 +63,28 @@ gh pr create --fill
 
 PR 본문에 `Closes #12` 를 적으면 머지될 때 **이슈가 자동으로 닫힌다.**
 이슈 화면 오른쪽 **Development → Create a branch** 로 브랜치를 만들면 자동으로 연결된다.
+
+### 이슈 제목 규칙
+
+`[타입]: 페이지 이름 - 상세 내용`
+
+예) `[Design]: 메인 페이지 - nav바 스타일 지정`
+
+타입은 아래 커밋 메시지의 태그 목록과 같은 것을 쓴다.
+
+### 브랜치 이름 규칙
+
+`타입-이슈번호-페이지이름-작업종류` (타입은 소문자)
+
+예) `feat-01-main-markup`
+
+| 작업 종류 | 쓰는 곳 |
+|---|---|
+| `markup` | 사업장 웹 — 마크업 |
+| `css` | 사업장 웹 — 스타일 |
+| `func` | 기능 구현 (공통) |
+| `ui` | 보호자 앱 — 화면. Compose는 마크업 · 스타일 구분이 없어서 `ui` 하나로 쓴다 |
+| `setup` | 환경 · 설정 작업 |
 
 ### 커밋 메시지 규칙
 
@@ -78,7 +100,7 @@ PR 본문에 `Closes #12` 를 적으면 머지될 때 **이슈가 자동으로 �
 | `Docs` | 문서 수정 | `Build` | 라이브러리 · 패키지 추가 |
 | `Test` | 테스트 코드 작성 · 수정 · 삭제 | `Merge` | 병합 |
 
-이슈 · PR 제목 규칙은 추후 확정.
+PR 제목 규칙은 추후 확정.
 
 ### 저장소가 공개라 조심할 것
 
