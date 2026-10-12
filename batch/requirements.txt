@@ -3,4 +3,6 @@
 
 requests
 python-dotenv
-supabase
+
+# supabase 공식 라이브러리는 쓰지 않습니다.
+# requests 로 REST API 를 직접 부릅니다 (이유는 common.py 설명 참고).
