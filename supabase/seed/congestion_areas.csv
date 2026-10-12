@@ -1,0 +1,122 @@
+area_cd,area_nm,eng_nm,category,collect_interval_hours
+POI001,강남 MICE 관광특구,Gangnam MICE Special Tourist Zone,관광특구,1
+POI002,동대문 관광특구,Dongdaemun Fashion Town Special Tourist Zone,관광특구,1
+POI003,명동 관광특구,Myeong-dong Namdaemun Bukchang-dong Da-dong Mugyo-dong Special Tourist Zone,관광특구,1
+POI004,이태원 관광특구,Itaewon Special Tourist Zone,관광특구,1
+POI005,잠실 관광특구,Jamsil Special Tourist Zone,관광특구,1
+POI006,종로·청계 관광특구,Jongno Cheonggye Special Toruist Zone,관광특구,1
+POI007,홍대 관광특구,HongDae Culture & Arts Special Tourist Zone,관광특구,1
+POI008,경복궁,Gyeongbokgung Palace,고궁·문화유산,1
+POI009,광화문·덕수궁,Gwanghwamun & Deoksugung Palace,고궁·문화유산,1
+POI010,보신각,Bosingak,고궁·문화유산,1
+POI011,서울 암사동 유적,Amsa Prehistoric Settlement Site,고궁·문화유산,1
+POI012,창덕궁·종묘,Changdeokgung Palace & Jongmyo Shrine,고궁·문화유산,1
+POI013,가산디지털단지역,Gasan Digital Complex station,인구밀집지역,1
+POI014,강남역,Gangnam station,인구밀집지역,1
+POI015,건대입구역,Konkuk University station,인구밀집지역,1
+POI016,고덕역,Godeok station,인구밀집지역,1
+POI017,고속터미널역,Express Bus Terminal station,인구밀집지역,1
+POI018,교대역,Seoul National University of Education station,인구밀집지역,1
+POI019,구로디지털단지역,Guro Digital Complex station,인구밀집지역,1
+POI020,구로역,Guro station,인구밀집지역,1
+POI021,군자역,Gunja station,인구밀집지역,1
+POI023,대림역,Daerim station,인구밀집지역,1
+POI024,동대문역,Dongdaemun station,인구밀집지역,1
+POI025,뚝섬역,Ttukseom station,인구밀집지역,1
+POI026,미아사거리역,Miasageori station,인구밀집지역,1
+POI027,발산역,Balsan station,인구밀집지역,1
+POI029,사당역,Sadang station,인구밀집지역,1
+POI030,삼각지역,Samgakji station,인구밀집지역,1
+POI031,서울대입구역,Seoul National University station,인구밀집지역,1
+POI032,서울식물원·마곡나루역,Seoul Botanic Park·Magongnaru station,인구밀집지역,1
+POI033,서울역,Seoul station,인구밀집지역,1
+POI034,선릉역,Seolleung station,인구밀집지역,1
+POI035,성신여대입구역,Sungshin Women's University station,인구밀집지역,1
+POI036,수유역,Suyu station,인구밀집지역,1
+POI037,신논현역·논현역,Sinnonhyeon·Nonhyeon station,인구밀집지역,1
+POI038,신도림역,Sindorim station,인구밀집지역,1
+POI039,신림역,Sillim station,인구밀집지역,1
+POI040,신촌·이대역,Sinchon·Ewha Womans University station,인구밀집지역,1
+POI041,양재역,Yangjae station,인구밀집지역,1
+POI042,역삼역,Yeoksam station,인구밀집지역,1
+POI043,연신내역,Yeonsinnae station,인구밀집지역,1
+POI044,오목교역·목동운동장,Omokgyo·Mok-dong Stadium station,인구밀집지역,1
+POI045,왕십리역,Wangsimni station,인구밀집지역,1
+POI046,용산역,Yongsan station,인구밀집지역,1
+POI047,이태원역,Itaewon station,인구밀집지역,1
+POI048,장지역,Jangji station,인구밀집지역,1
+POI049,장한평역,Janghanpyeong station,인구밀집지역,1
+POI050,천호역,Cheonho station,인구밀집지역,1
+POI051,총신대입구(이수)역,Chongshin University(Isu) station,인구밀집지역,1
+POI052,충정로역,Chungjeongno station,인구밀집지역,1
+POI053,합정역,Hapjeong station,인구밀집지역,1
+POI054,혜화역,Hyehwa station,인구밀집지역,1
+POI055,홍대입구역(2호선),Hongik University station(Line 2),인구밀집지역,1
+POI056,회기역,Hoegi station,인구밀집지역,1
+POI058,가락시장,Garak Market,발달상권,1
+POI059,가로수길,Garosu-gil,발달상권,1
+POI060,광장(전통)시장,Gwangjang(Traditional) Market,발달상권,1
+POI061,김포공항,Gimpo Airport,발달상권,1
+POI063,노량진,Noryangjin,발달상권,1
+POI064,덕수궁길·정동길,Deoksugung-gil·Jeongdong-gil,발달상권,1
+POI066,북촌한옥마을,Bukchon Hanok Village,발달상권,1
+POI067,서촌,Seochon,발달상권,1
+POI068,성수카페거리,Seongsu Cafe Street,발달상권,1
+POI070,쌍문역,Ssangmun-dong station,인구밀집지역,1
+POI071,압구정로데오거리,Apgujeong Rodeo Street,발달상권,1
+POI072,여의도,Yeouido,발달상권,1
+POI073,연남동,Yeonnam-dong,발달상권,1
+POI074,영등포 타임스퀘어,Yeongdeungpo Time square,발달상권,1
+POI076,용리단길,Yongnidan-gil,발달상권,1
+POI077,이태원 앤틱가구거리,Itaewon Antiques street,발달상권,1
+POI078,인사동,Insa-dong,발달상권,1
+POI079,창동 신경제 중심지,Changdong New Economic Center,발달상권,1
+POI080,청담동 명품거리,Cheongdam-dong Luxury Fashion street,발달상권,1
+POI081,청량리 제기동 일대 전통시장,Traditional market in Cheongnyangni Jegi-dong ,발달상권,1
+POI082,해방촌·경리단길,Haebangchon·Gyeongnidan-gil,발달상권,1
+POI083,DDP(동대문디자인플라자),DDP(Dongdaemun Design Plaza),발달상권,1
+POI084,DMC(디지털미디어시티),DMC(Digital Media City),발달상권,1
+POI085,강서한강공원,Gangseo Hangang Park,공원,1
+POI086,고척돔,Gocheok Dome,공원,1
+POI087,광나루한강공원,Gwangnaru Hangang Park,공원,1
+POI088,광화문광장,Gwanghwamun Square,공원,1
+POI089,국립중앙박물관·용산가족공원,The National Museum of Korea·Yongsan Family Park,공원,1
+POI090,난지한강공원,Nanji Hangang Park,공원,1
+POI091,남산공원,Namsan Park,공원,1
+POI092,노들섬,Nodeul island,공원,1
+POI093,뚝섬한강공원,Ttukseom Hangang Park,공원,1
+POI094,망원한강공원,Mangwon Hangang Park,공원,1
+POI095,반포한강공원,Banpo Hangang Park,공원,1
+POI096,북서울꿈의숲,Dream Forest,공원,1
+POI098,서리풀공원·몽마르뜨공원,Seoripul Park·Montmartre Park,공원,1
+POI100,서울대공원,Seoul Grand Park,공원,1
+POI101,서울숲공원,Seoul Forest,공원,1
+POI102,아차산,Achasan,공원,1
+POI103,양화한강공원,Yanghwa Hangang Park,공원,1
+POI104,어린이대공원,Children's Grand Park,공원,1
+POI105,여의도한강공원,Yeouido Hangang Park,공원,1
+POI106,월드컵공원,World Cup Park,공원,1
+POI107,응봉산,Eungbongsan,공원,1
+POI108,이촌한강공원,Ichon Hangang Park,공원,1
+POI109,잠실종합운동장,Jamsil (Seoul) Sports Complex,공원,1
+POI110,잠실한강공원,Jamsil Hangang Park,공원,1
+POI111,잠원한강공원,Jamwon Hangang Park,공원,1
+POI112,청계산,Cheonggyesan,공원,1
+POI114,북창동 먹자골목,Bukchang-dong food alley,발달상권,1
+POI115,남대문시장,Namdaemun Market,발달상권,1
+POI116,익선동,Ikseon-dong,발달상권,1
+POI117,신정네거리역,Shinjeongnegeori Station,인구밀집지역,1
+POI118,잠실새내역,Jamsil Saenae Station,인구밀집지역,1
+POI119,잠실역,Jamsil Station,인구밀집지역,1
+POI120,잠실롯데타워·석촌호수,Jamsil Lotte Tower·SeokchonhosuLake,발달상권,1
+POI121,송리단길·호수단길,Songridan-gil·Hosudan-gil,발달상권,1
+POI122,신촌 스타광장,Shinchon Star Plaza,발달상권,1
+POI123,보라매공원,Boramae Park,공원,1
+POI124,서대문독립공원,Seodaemun Independence Park,공원,1
+POI125,안양천,Anyangcheon River,공원,1
+POI126,여의서로,Yeouiseoro,공원,1
+POI127,올림픽공원,Olympic Park,공원,1
+POI128,홍제폭포,Hongje Waterfall,공원,1
+POI129,송현녹지광장,Songhyeon Green Plaza,공원,1
+POI130,시의회 앞,City Council,인구밀집지역,1
+POI131,숭례문,Sungnyemun Gate,인구밀집지역,1

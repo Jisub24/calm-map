@@ -16,7 +16,7 @@
 |---|---|---|
 | `android/` | 보호자 앱 | Kotlin · Jetpack Compose · TFLite(YAMNet) · 지도 SDK |
 | `business-web/` | 사업장 등록 웹 | Supabase JS · 무료 호스팅 |
-| `supabase/` | DB 표 SQL, 처음 넣을 데이터 | PostgreSQL |
+| `supabase/` | DB 테이블 SQL, 처음 넣을 데이터 | PostgreSQL |
 | `batch/` | 혼잡도 수집 · 점수 계산 · 예측 | Python · GitHub Actions |
 | `analysis/` | YAMNet 실험, 검증 분석 | Python 노트북 |
 | `docs/` | 기획 문서 (저장소에 올리지 않음) | — |
@@ -156,7 +156,8 @@ PR 제목 규칙은 추후 확정.
 | `docs/01_프로젝트_개요.md` | 문제, 해결 방식, AI를 쓰는 곳 |
 | `docs/02_MVP_범위.md` | 만드는 것 / 만들지 않는 것 |
 | `docs/03_화면_구성.md` | 화면 이동 흐름, 화면별 구성 요소 |
-| `docs/04_구현_할일_데이터.md` | 프론트 · 백 · DB 할 일, 표 구조, 계산 규칙 |
+| `docs/04_구현_할일_데이터.md` | 프론트 · 백 · DB 할 일, 테이블 구조, 계산 규칙 |
 | `docs/05_일정.md` | 제출까지 일정, 체크포인트 |
 | `docs/06_디자인_원칙.md` | 문구, 단계 표시, 색 |
 | `docs/07_개발_환경_준비.md` | 진행 상황, 환경 설치, 실행 방법 |
+| `docs/08_DB_설계.md` | 테이블 구조, 칸마다 왜 필요한지, 권한 규칙 |
