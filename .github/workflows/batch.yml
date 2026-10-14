@@ -50,3 +50,29 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python collect_congestion.py
+
+  # 혼잡도와 별도 작업으로 둔다. 한쪽이 실패해도 다른 쪽은 모인다.
+  #
+  # 다만 예약(cron)은 위와 공유한다. 따로 걸면 GitHub 이 밀 때
+  # 혼잡도는 20:50, 상권은 23:10 처럼 어긋나서
+  # "이 시각에 혼잡은 붐빔인데 상권은 어땠나"를 비교할 수 없게 된다.
+  collect-commercial:
+    name: 상권 수집
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 라이브러리 설치
+        run: pip install -r batch/requirements.txt
+
+      - name: 실행
+        working-directory: batch
+        env:
+          SEOUL_API_KEY: ${{ secrets.SEOUL_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python collect_commercial.py
