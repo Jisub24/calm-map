@@ -4,7 +4,8 @@ GitHub Actions(`.github/workflows/batch.yml`)로 정해진 간격마다 실행�
 
 | 작업 | 파일 | 주기 | 내용 |
 |---|---|---|---|
-| 혼잡도 수집 | `collect_congestion.py` | 1시간 | 서울시 실시간 인구데이터에서 현재 혼잡도 + 향후 12시간 예측 저장 |
+| 혼잡도 수집 | `collect_congestion.py` | 20분 | 서울시 실시간 인구데이터에서 현재 혼잡도 + 향후 12시간 예측 저장 |
+| 상권 수집 | `collect_commercial.py` | 20분 | 서울시 상권 정보(결제 기반)를 지역·업종별로 저장 |
 | 소리 묶음 · 점수 계산 | `calculate_score.py` | 10~15분 | 측정 라벨을 소리 종류 5개로 묶고 요소별 점수 계산 |
 | 시간대별 예측 · 상태 판정 | `forecast.py` | 10~15분 | 오늘 1시간 단위 예측, 단계 / 추정 / 정보 부족 판정 |
 
@@ -52,12 +53,34 @@ python batch/collect_congestion.py
 
 ## 파일 구성
 
-| 파일 | 하는 일 |
-|---|---|
-| `common.py` | `.env` 읽기, Supabase 읽고 쓰기, `settings` 읽기. 다른 파일들이 함께 쓴다 |
-| `collect_congestion.py` | 서울시 API 호출 → `congestion` 테이블 저장 |
-| `calculate_score.py` | 아직 안 만듦 |
-| `forecast.py` | 아직 안 만듦 |
+| 파일 | 하는 일 | 실행 |
+|---|---|---|
+| `common.py` | `.env` 읽기, Supabase 읽고 쓰기, `settings` 읽기. 다른 파일들이 함께 쓴다 | — |
+| `collect_congestion.py` | 서울시 인구 혼잡 121곳 → `congestion` | **자동** 20분 |
+| `collect_commercial.py` | 서울시 상권 4곳 → `commercial` · `commercial_categories` | **자동** 20분 |
+| `calculate_score.py` | 아직 안 만듦 | — |
+| `forecast.py` | 아직 안 만듦 | — |
+
+### 혼잡도와 상권은 다른 데이터다
+
+```
+혼잡도  통신사 기지국 신호 → 그 지역에 몇 명 "있나"
+상권    신한카드 결제      → 그 지역 매장에서 몇 번 "샀나"
+```
+
+길에 있는 사람과 가게에 들어간 사람은 다르다. 실제로 확인한 차이다.
+
+```
+홍대 관광특구 지역 전체   보통
+  한식                  바쁜      <- 지역보다 높다
+  할인점/슈퍼마켓          한산한    <- 지역보다 낮다
+```
+
+지역 값만 쓰면 식당은 낮게, 마트는 높게 안내하게 된다.
+그래서 업종별 상권을 따로 모은다 (`docs/12_답변서_반영.md` 8번).
+
+수집할 지역은 `settings.commercial_areas` 에 있어서 **코드를 고치지 않고 바꾼다.**
+82곳 전부 모으면 하루 70,000줄이라 권역만 모은다.
 
 ## 알아둘 것
 
