@@ -24,6 +24,7 @@ fun SplashScreen(modifier: Modifier = Modifier) {
             .fillMaxSize()
             .background(Color.White)
             .padding(horizontal = 20.dp),
+        // 두 줄 사이 8, 묶음은 화면 정가운데
         verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
