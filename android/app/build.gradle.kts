@@ -32,6 +32,11 @@ android {
         // 값이 없으면 지도가 회색 화면만 나온다.
         manifestPlaceholders["naverMapClientId"] =
             localProps.getProperty("NAVER_MAP_CLIENT_ID") ?: ""
+
+        // 코드에서 BuildConfig.SUPABASE_URL 처럼 꺼내 쓴다.
+        // anon key 만 넣는다. service key 는 앱에 절대 넣지 않는다
+        buildConfigField("String", "SUPABASE_URL", "\"${localProps.getProperty("SUPABASE_URL") ?: ""}\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProps.getProperty("SUPABASE_ANON_KEY") ?: ""}\"")
     }
 
     buildTypes {
@@ -48,6 +53,8 @@ android {
     }
     buildFeatures {
         compose = true
+        // 위 buildConfigField 를 쓰려면 켜야 한다
+        buildConfig = true
     }
 }
 
@@ -62,6 +69,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.naver.map.sdk)
+    implementation(platform(libs.supabase.bom))
+    implementation(libs.supabase.auth)
+    implementation(libs.ktor.client.okhttp)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
