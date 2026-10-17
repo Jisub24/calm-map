@@ -13,10 +13,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.calmmap.ui.onboarding.LoginScreen
 import com.calmmap.ui.onboarding.OnboardingScreen
 import com.calmmap.ui.onboarding.SplashScreen
 import com.calmmap.ui.theme.CalmMapTheme
 import kotlinx.coroutines.delay
+
+// 처음 진입 때 거치는 단계. 위에서 아래 순서로 진행한다
+private enum class StartStep { Splash, Onboarding, Login }
 
 // 앱의 입구. 앱을 켜면 여기서 첫 화면을 띄운다
 class MainActivity : ComponentActivity() {
@@ -25,30 +29,33 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             CalmMapTheme {
-                // TODO: 로그인 화면이 생기면 화면 이동(Navigation)으로 바꾼다
-                // 스플래시를 보여줄지. 바뀌면 아래 if 가 다시 실행된다
-                var showSplash by remember { mutableStateOf(true) }
+                // TODO: 화면이 더 늘어나면 화면 이동(Navigation)으로 바꾼다
+                // 지금 보여줄 단계. 바뀌면 아래 화면이 다시 그려진다
+                var step by remember { mutableStateOf(StartStep.Splash) }
 
-                // 처음 한 번만: 1.5초 뒤 스플래시를 끈다
+                // 처음 한 번만: 1.5초 뒤 스플래시에서 온보딩으로
                 LaunchedEffect(Unit) {
                     delay(1500)
-                    showSplash = false
+                    step = StartStep.Onboarding
                 }
 
-                // showSplash 가 바뀔 때 화면을 왼쪽으로 밀어내며 바꾼다
+                // step 이 바뀔 때 화면을 왼쪽으로 밀어내며 바꾼다
                 AnimatedContent(
-                    targetState = showSplash,
+                    targetState = step,
                     transitionSpec = {
                         // 새 화면은 오른쪽에서 들어오고, 이전 화면은 왼쪽으로 나간다
                         slideInHorizontally { fullWidth -> fullWidth } togetherWith
                             slideOutHorizontally { fullWidth -> -fullWidth }
                     },
-                    label = "splash",
-                ) { isSplash ->
-                    if (isSplash) {
-                        SplashScreen()
-                    } else {
-                        OnboardingScreen(onFinish = { /* TODO: 로그인 화면으로 */ })
+                    label = "startStep",
+                ) { currentStep ->
+                    when (currentStep) {
+                        StartStep.Splash -> SplashScreen()
+                        StartStep.Onboarding -> OnboardingScreen(onFinish = { step = StartStep.Login })
+                        StartStep.Login -> LoginScreen(
+                            onKakaoClick = { /* TODO: 카카오 로그인 후 위치 권한 화면으로 */ },
+                            onGuestClick = { /* TODO: 게스트 로그인 후 위치 권한 화면으로 */ },
+                        )
                     }
                 }
             }
