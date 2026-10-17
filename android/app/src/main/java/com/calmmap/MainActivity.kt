@@ -5,7 +5,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.calmmap.ui.map.MapScreen
+import com.calmmap.ui.CalmMapApp
 import com.calmmap.ui.theme.CalmMapTheme
 import com.naver.maps.map.NaverMapSdk
 
@@ -24,9 +24,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             CalmMapTheme {
-                // 지금은 지도 하나만 띄운다.
-                // 스플래시 · 온보딩이 붙은 뒤에 화면 이동(네비게이션)을 넣는다.
-                MapScreen()
+                // 어느 화면을 보여줄지는 CalmMapApp 이 정한다.
+                // 화면이 늘어나도 여기는 안 고친다
+                CalmMapApp()
             }
         }
     }
