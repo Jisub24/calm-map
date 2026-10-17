@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.calmmap.ui.onboarding.LocationPermissionScreen
 import com.calmmap.ui.onboarding.LoginScreen
 import com.calmmap.ui.onboarding.OnboardingScreen
 import com.calmmap.ui.onboarding.SplashScreen
@@ -20,7 +21,7 @@ import com.calmmap.ui.theme.CalmMapTheme
 import kotlinx.coroutines.delay
 
 // 처음 진입 때 거치는 단계. 위에서 아래 순서로 진행한다
-private enum class StartStep { Splash, Onboarding, Login }
+private enum class StartStep { Splash, Onboarding, Login, LocationPermission }
 
 // 앱의 입구. 앱을 켜면 여기서 첫 화면을 띄운다
 class MainActivity : ComponentActivity() {
@@ -53,8 +54,13 @@ class MainActivity : ComponentActivity() {
                         StartStep.Splash -> SplashScreen()
                         StartStep.Onboarding -> OnboardingScreen(onFinish = { step = StartStep.Login })
                         StartStep.Login -> LoginScreen(
-                            onKakaoClick = { /* TODO: 카카오 로그인 후 위치 권한 화면으로 */ },
-                            onGuestClick = { /* TODO: 게스트 로그인 후 위치 권한 화면으로 */ },
+                            // TODO: 카카오 로그인을 붙이면 로그인 성공 후에 넘어가게 바꾼다
+                            onKakaoClick = { step = StartStep.LocationPermission },
+                            // TODO: 게스트 로그인(signInAnonymously) 붙이기 전까지는 아무 동작 없음
+                            onGuestClick = {},
+                        )
+                        StartStep.LocationPermission -> LocationPermissionScreen(
+                            onDone = { /* TODO: 아이 프로필 화면으로 */ },
                         )
                     }
                 }
