@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
@@ -71,6 +72,8 @@ fun OnboardingScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color.White)
+            // 아래 내비게이션 바(◁ ○ □)에 버튼이 가리지 않게 그 높이만큼 띄운다
+            .navigationBarsPadding()
             .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
