@@ -2,9 +2,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- 주변 장소를 지도에 보여주려고 위치를 쓴다 -->
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- 인터넷 — 지도 타일과 Supabase 호출에 필요 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- 위치 — 지도의 "내 위치"와 장소까지의 거리 계산.
+         거부해도 측정 동네 중심으로 지도를 보여준다 (docs/03 예외 상황) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- 마이크 — 소리 측정.
+         이 줄이 없으면 코드로 요청해도 거부되어 측정 기능이 아예 동작하지 않는다.
+         원본 소리는 저장하지도 보내지도 않는다 (CLAUDE.md 원칙 1) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:allowBackup="true"
@@ -15,6 +25,14 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.CalmMap">
+
+        <!-- 네이버 지도 Client ID.
+             값은 local.properties 의 NAVER_MAP_CLIENT_ID 에서 온다 (build.gradle.kts).
+             NCP 에 등록한 패키지 이름(com.calmmap)과 다르면 지도가 회색으로만 나온다. -->
+        <meta-data
+            android:name="com.naver.maps.map.NCP_KEY_ID"
+            android:value="${naverMapClientId}" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

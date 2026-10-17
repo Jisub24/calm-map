@@ -1,6 +1,7 @@
 package com.calmmap
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -13,21 +14,32 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.calmmap.ui.map.MapScreen
 import com.calmmap.ui.onboarding.ChildProfileScreen
 import com.calmmap.ui.onboarding.LocationPermissionScreen
 import com.calmmap.ui.onboarding.LoginScreen
 import com.calmmap.ui.onboarding.OnboardingScreen
 import com.calmmap.ui.onboarding.SplashScreen
 import com.calmmap.ui.theme.CalmMapTheme
+import com.naver.maps.map.NaverMapSdk
 import kotlinx.coroutines.delay
 
-// 처음 진입 때 거치는 단계. 위에서 아래 순서로 진행한다
-private enum class StartStep { Splash, Onboarding, Login, LocationPermission, ChildProfile }
+// 처음 진입 때 거치는 단계. 위에서 아래 순서로 진행하고, 끝나면 지도 홈으로 간다
+private enum class StartStep { Splash, Onboarding, Login, LocationPermission, ChildProfile, Map }
 
 // 앱의 입구. 앱을 켜면 여기서 첫 화면을 띄운다
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 지도 인증이 실패해도 네이버 SDK 는 아무 말 없이 빈 화면만 보여준다.
+        // 원인(키가 틀렸는지, 패키지 이름이 안 맞는지)을 알 수 있게 이유를 남긴다.
+        // 지도가 만들어지기 전에 걸어둬야 해서 setContent 앞에 둔다.
+        NaverMapSdk.getInstance(this).onAuthFailedListener =
+            NaverMapSdk.OnAuthFailedListener { exception ->
+                Log.e("CalmMap", "네이버 지도 인증 실패: ${exception.message}", exception)
+            }
+
         enableEdgeToEdge()
         setContent {
             CalmMapTheme {
@@ -66,11 +78,12 @@ class MainActivity : ComponentActivity() {
                             onDone = { step = StartStep.ChildProfile },
                         )
                         StartStep.ChildProfile -> ChildProfileScreen(
-                            // TODO: 지도 홈(#17)이 합쳐지면 저장 후 지도 홈으로
-                            onStart = { _ -> },
-                            onSkip = {},
+                            // TODO: Supabase profiles 에 저장한 뒤 넘어가게 바꾼다
+                            onStart = { _ -> step = StartStep.Map },
+                            onSkip = { step = StartStep.Map },
                             onBack = { step = StartStep.LocationPermission },
                         )
+                        StartStep.Map -> MapScreen()
                     }
                 }
             }

@@ -8,8 +8,10 @@
 # Android SDK 경로 — Android Studio 가 프로젝트를 열 때 보통 자동으로 채웁니다
 sdk.dir=C\:\Users\사용자이름\AppData\Local\Android\Sdk
 
-# 지도 SDK 키 — 카카오 / 네이버 중 무엇을 쓸지 아직 미정 (CLAUDE.md "아직 확인 안 된 것")
-MAP_API_KEY=
+# 네이버 지도 Client ID
+#   https://console.ncloud.com → Services → Maps → Application 등록 → Mobile Dynamic Map 선택
+#   Android 앱 패키지 이름에 com.calmmap 을 등록해야 지도가 뜹니다
+NAVER_MAP_CLIENT_ID=
 
 # Supabase — 앱은 anon key 만 씁니다
 SUPABASE_URL=
