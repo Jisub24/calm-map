@@ -1,0 +1,199 @@
+package com.calmmap.ui.model
+
+/**
+ * 장소 상세(B4)에서만 쓰는 정보.
+ *
+ * 지도나 목록에는 필요 없어서 PlaceUi 와 나눠 둔다.
+ * 지도에 장소 15곳을 띄울 때 소리 구성이나 점수 내역까지 들고 있을 이유가 없다.
+ */
+data class PlaceDetailUi(
+    /** 보호자가 '매우 민감'으로 고른 자극이 관측됐을 때 띄우는 한 줄. 없으면 null */
+    val warning: String? = null,
+    val score: ScoreBreakdown,
+    val sounds: List<SoundRow> = emptyList(),
+    val light: LightInfo? = null,
+    val calmHours: CalmHours? = null,
+)
+
+/** 종합 지수를 어떻게 냈는지 */
+data class ScoreBreakdown(
+    val hour: Int,
+    val total: Int,
+    /** 하위 항목 4개. 혼잡 · 소리 크기 · 소리 종류/돌발성 · 밝기 */
+    val factors: List<ScoreFactor>,
+    /** 가장 높은 항목의 이름. 왜 이 점수인지를 한 마디로 말해 준다 */
+    val mainFactor: String,
+    /** "평일 12시 칸 · 실측 4회 · 중앙값 80 (72~86)" */
+    val basis: String,
+    /** 주변 지역 상권 정보. 장소가 아니라 지역 단위라는 것을 분명히 적는다 */
+    val areaNote: String,
+)
+
+data class ScoreFactor(
+    val label: String,
+    val score: Int,
+    /** 최댓값이라 종합 지수가 된 항목 */
+    val isMain: Boolean = false,
+)
+
+/** 소리 묶음 한 줄 */
+data class SoundRow(
+    val label: String,
+    val value: String,
+    val emphasized: Boolean = false,
+    /** "그중 안내방송 추정 · 3회" 처럼 아래에 붙는 설명 */
+    val subLabel: String? = null,
+    val subValue: String? = null,
+)
+
+data class LightInfo(
+    val lux: String,
+    val flicker: String,
+    /** 깜빡임을 실제로 쟀는지. 안 쟀으면 점선으로 그린다 */
+    val flickerMeasured: Boolean,
+    val note: String,
+    /** 보호자가 남긴 제보. 점수에는 넣지 않는다 */
+    val report: String? = null,
+)
+
+/** 사업장이 등록한 시간과 우리가 관측으로 뽑은 시간을 나란히 보여준다 */
+data class CalmHours(
+    val businessHours: String?,
+    val businessActions: String?,
+    val aiHours: String,
+    val aiBasis: String,
+)
+
+// ─────────────────────────────────────────────────────────────
+// 10/18 답사 전까지 쓰는 임시 데이터
+// ─────────────────────────────────────────────────────────────
+
+val sampleMartDetail = PlaceDetailUi(
+    warning = "'매우'로 고른 갑작스러운 소리(안내방송 추정)가 관측된 곳이에요.",
+    score = ScoreBreakdown(
+        hour = 12,
+        total = 80,
+        factors = listOf(
+            ScoreFactor("장소 혼잡", 20),
+            ScoreFactor("소리 크기", 35),
+            ScoreFactor("소리 종류 · 돌발성", 80, isMain = true),
+            ScoreFactor("밝기", 30),
+        ),
+        mainFactor = "갑작스러운 소리",
+        basis = "평일 12시 칸 · 실측 4회 · 중앙값 80 (72~86)",
+        areaNote = "주변 지역: 홍대 상권 지금 '보통' · 18시부터 '바쁜' 예상 (서울시 실시간 도시데이터)",
+    ),
+    sounds = listOf(
+        SoundRow(
+            label = "갑작스러운 소리",
+            value = "1시간에 4회",
+            emphasized = true,
+            subLabel = "그중 안내방송 추정",
+            subValue = "3회",
+        ),
+        SoundRow("웅성임 · 음악", "계속 들림"),
+        SoundRow("기계음", "가끔"),
+        SoundRow("경보음 · 사람의 큰 소리", "관측 없음"),
+    ),
+    light = LightInfo(
+        lux = "420 lux · 보통",
+        flicker = "미측정",
+        flickerMeasured = false,
+        note = "미측정은 '깜빡임 없음'이 아니에요. 깜빡이는 조명을 '매우'로 고른 아이에게는 이 장소를 '무던함'으로 추천하지 않아요.",
+        report = "\"형광등이 깜빡였어요\" · 보호자 제보 · 10/11 · 점수에는 넣지 않아요",
+    ),
+    calmHours = CalmHours(
+        businessHours = "화 10~12시",
+        businessActions = "음악 끔 · 조명 낮춤 · 방송 줄임",
+        aiHours = "화 10~12시 보통",
+        aiBasis = "실측 2회",
+    ),
+)
+
+val sampleLibraryDetail = PlaceDetailUi(
+    score = ScoreBreakdown(
+        hour = 15,
+        total = 28,
+        factors = listOf(
+            ScoreFactor("장소 혼잡", 18),
+            ScoreFactor("소리 크기", 28, isMain = true),
+            ScoreFactor("소리 종류 · 돌발성", 15),
+            ScoreFactor("밝기", 22),
+        ),
+        mainFactor = "소리 크기",
+        basis = "평일 15시 칸 · 실측 5회 · 중앙값 28 (24~33)",
+        areaNote = "주변 지역: 홍대 상권 지금 '보통' (서울시 실시간 도시데이터)",
+    ),
+    sounds = listOf(
+        SoundRow("웅성임 · 음악", "가끔"),
+        SoundRow("기계음", "가끔"),
+        SoundRow("갑작스러운 소리", "관측 없음"),
+        SoundRow("경보음 · 사람의 큰 소리", "관측 없음"),
+    ),
+    light = LightInfo(
+        lux = "350 lux · 보통",
+        flicker = "없음",
+        flickerMeasured = true,
+        note = "깜빡임을 측정해서 확인했어요.",
+    ),
+)
+
+val sampleCafeDetail = PlaceDetailUi(
+    warning = "'매우'로 고른 갑작스러운 소리가 관측된 곳이에요.",
+    score = ScoreBreakdown(
+        hour = 15,
+        total = 76,
+        factors = listOf(
+            ScoreFactor("장소 혼잡", 58),
+            ScoreFactor("소리 크기", 62),
+            ScoreFactor("소리 종류 · 돌발성", 76, isMain = true),
+            ScoreFactor("밝기", 41),
+        ),
+        mainFactor = "갑작스러운 소리",
+        basis = "평일 15시 칸 · 실측 6회 · 중앙값 76 (70~84)",
+        areaNote = "주변 지역: 홍대 상권 지금 '바쁜' (서울시 실시간 도시데이터)",
+    ),
+    sounds = listOf(
+        SoundRow("갑작스러운 소리", "1시간에 6회", emphasized = true),
+        SoundRow("웅성임 · 음악", "계속 들림"),
+        SoundRow("기계음", "자주"),
+        SoundRow("경보음 · 사람의 큰 소리", "관측 없음"),
+    ),
+    light = LightInfo(
+        lux = "280 lux · 어두움",
+        flicker = "미측정",
+        flickerMeasured = false,
+        note = "미측정은 '깜빡임 없음'이 아니에요.",
+    ),
+)
+
+val sampleBakeryDetail = PlaceDetailUi(
+    score = ScoreBreakdown(
+        hour = 12,
+        total = 60,
+        factors = listOf(
+            ScoreFactor("장소 혼잡", 45),
+            ScoreFactor("소리 크기", 60, isMain = true),
+            ScoreFactor("소리 종류 · 돌발성", 38),
+            ScoreFactor("밝기", 33),
+        ),
+        mainFactor = "소리 크기",
+        basis = "평일 12시 칸 · 실측 1회 · 다른 시간은 추정",
+        areaNote = "주변 지역: 홍대 상권 지금 '보통' (서울시 실시간 도시데이터)",
+    ),
+    sounds = listOf(
+        SoundRow("웅성임 · 음악", "계속 들림"),
+        SoundRow("기계음", "가끔"),
+        SoundRow("갑작스러운 소리", "관측 없음"),
+        SoundRow("경보음 · 사람의 큰 소리", "관측 없음"),
+    ),
+)
+
+/** 장소 번호로 상세 정보를 찾는다. 없으면 null */
+fun sampleDetailFor(placeId: Long): PlaceDetailUi? = when (placeId) {
+    1L -> sampleLibraryDetail
+    2L -> sampleMartDetail
+    3L -> sampleCafeDetail
+    4L -> sampleBakeryDetail
+    else -> null
+}
