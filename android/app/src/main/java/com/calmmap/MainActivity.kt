@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.calmmap.ui.CalmMapApp
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -19,7 +20,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.calmmap.data.supabase
-import com.calmmap.ui.map.MapScreen
 import com.calmmap.ui.onboarding.ChildProfileScreen
 import com.calmmap.ui.onboarding.LocationPermissionScreen
 import com.calmmap.ui.onboarding.LoginScreen
@@ -115,7 +115,7 @@ class MainActivity : ComponentActivity() {
                             onSkip = { step = StartStep.Map },
                             onBack = { step = StartStep.LocationPermission },
                         )
-                        StartStep.Map -> MapScreen()
+                        StartStep.Map -> CalmMapApp()
                     }
                 }
             }
