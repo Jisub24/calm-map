@@ -183,6 +183,12 @@ fun CalmMapApp() {
             onBack = { screen = cardFrom },
             onChildViewClick = { screen = Screen.VISIT_CHILD },
             onDepartClick = { screen = Screen.VISIT_ONSITE },
+            // 그 계획만 빼고 들어온 곳으로. 목록이 비면 지도로
+            onCancelVisit = {
+                activePlan?.let { visitPlans.remove(it) }
+                activePlan = null
+                screen = if (cardFrom == Screen.VISIT_PLANS && visitPlans.isEmpty()) Screen.MAP else cardFrom
+            },
         )
 
         Screen.VISIT_CHILD -> ChildViewScreen(onClose = { screen = Screen.VISIT_CARD })
