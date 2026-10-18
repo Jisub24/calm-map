@@ -222,6 +222,9 @@ private fun VisitBanner(
                 color = Paper,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                // 둘째 줄은 글자가 작아 누르는 영역이 위로 넓어진다(최소 48dp).
+                // 첫 줄도 따로 누를 수 있게 해야 첫 줄을 눌렀을 때 둘째 줄로 가지 않는다
+                modifier = Modifier.pressFade(role = Role.Button, onClick = onClick),
             )
             // 첫 줄보다 덜 눈에 띄게 연한 글자
             if (otherCount > 0) {
