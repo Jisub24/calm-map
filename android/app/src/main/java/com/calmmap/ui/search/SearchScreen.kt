@@ -69,6 +69,7 @@ fun SearchScreen(
     onPlaceClick: (PlaceUi) -> Unit,
     modifier: Modifier = Modifier,
     places: List<PlaceUi> = samplePlaces,
+    onTabSelect: (MainTab) -> Unit = {},
 ) {
     var query by remember { mutableStateOf("") }
     var nearestFirst by remember { mutableStateOf(true) }
@@ -155,7 +156,7 @@ fun SearchScreen(
             }
         }
 
-        BottomTabBar(selected = MainTab.MAP, onSelect = {})
+        BottomTabBar(selected = MainTab.MAP, onSelect = onTabSelect)
     }
 }
 

@@ -6,17 +6,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.calmmap.ui.component.MainTab
 import com.calmmap.ui.detail.NoDataScreen
 import com.calmmap.ui.detail.PlaceDetailScreen
 import com.calmmap.ui.map.MapScreen
 import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.sampleDetailFor
 import com.calmmap.ui.model.sampleNoDataFor
+import com.calmmap.ui.mypage.DataInfoScreen
+import com.calmmap.ui.mypage.MyPageScreen
+import com.calmmap.ui.mypage.VisitHistoryScreen
 import com.calmmap.ui.search.SearchScreen
 import java.time.LocalTime
 
 /** 지금 보여줄 화면 */
-private enum class Screen { MAP, SEARCH, DETAIL }
+private enum class Screen { MAP, SEARCH, DETAIL, HISTORY, ME, DATA_INFO }
 
 /**
  * 어느 화면을 보여줄지 정하는 자리.
@@ -40,19 +44,46 @@ fun CalmMapApp() {
         screen = Screen.DETAIL
     }
 
-    // 기기 뒤로 가기를 누르면 지도로 돌아온다.
+    // 하단 탭을 누르면 그 탭의 첫 화면으로
+    fun selectTab(tab: MainTab) {
+        screen = when (tab) {
+            MainTab.MAP -> Screen.MAP
+            MainTab.HISTORY -> Screen.HISTORY
+            MainTab.ME -> Screen.ME
+        }
+    }
+
+    // 기기 뒤로 가기를 누르면 지도로 돌아온다. 데이터 안내는 내 정보로 돌아온다.
     // 이게 없으면 앱이 그냥 꺼져서 사용자가 보다 말고 튕긴 것처럼 느낀다
-    BackHandler(enabled = screen != Screen.MAP) { screen = Screen.MAP }
+    BackHandler(enabled = screen != Screen.MAP) {
+        screen = if (screen == Screen.DATA_INFO) Screen.ME else Screen.MAP
+    }
 
     when (screen) {
         Screen.MAP -> MapScreen(
             onSearchClick = { screen = Screen.SEARCH },
             onPlaceClick = { openDetail(it) },
+            onTabSelect = { selectTab(it) },
         )
 
         Screen.SEARCH -> SearchScreen(
             onBack = { screen = Screen.MAP },
             onPlaceClick = { openDetail(it) },
+            onTabSelect = { selectTab(it) },
+        )
+
+        Screen.HISTORY -> VisitHistoryScreen(onTabSelect = { selectTab(it) })
+
+        Screen.ME -> MyPageScreen(
+            onTabSelect = { selectTab(it) },
+            onVisitHistoryClick = { screen = Screen.HISTORY },
+            onDataInfoClick = { screen = Screen.DATA_INFO },
+        )
+
+        // TODO: 삭제는 확인 창을 띄운 뒤 Supabase 데이터와 계정을 지운다
+        Screen.DATA_INFO -> DataInfoScreen(
+            onBack = { screen = Screen.ME },
+            onDeleteAllClick = {},
         )
 
         Screen.DETAIL -> {
