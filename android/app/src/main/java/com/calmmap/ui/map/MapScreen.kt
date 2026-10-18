@@ -80,9 +80,9 @@ fun MapScreen(
     onSearchClick: () -> Unit = {},
     onPlaceClick: (PlaceUi) -> Unit = {},
     onMeasureClick: () -> Unit = {},
+    onTabSelect: (MainTab) -> Unit = {},
 ) {
     var personalized by remember { mutableStateOf(false) }
-    var selectedTab by remember { mutableStateOf(MainTab.MAP) }
     // 장소를 고르면 아래 목록이 그 장소 카드(B2)로 바뀐다
     var selectedPlace by remember { mutableStateOf<PlaceUi?>(null) }
     val nowHour = remember { LocalTime.now().hour }
@@ -169,7 +169,7 @@ fun MapScreen(
             )
         }
 
-        BottomTabBar(selected = selectedTab, onSelect = { selectedTab = it })
+        BottomTabBar(selected = MainTab.MAP, onSelect = onTabSelect)
     }
 }
 
