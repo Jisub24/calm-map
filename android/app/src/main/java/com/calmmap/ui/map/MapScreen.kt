@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import java.time.LocalTime
@@ -88,6 +89,9 @@ fun MapScreen(
     /** 방문 예정 띠를 눌렀을 때. 미리 보는 카드를 연다 */
     onVisitPlanClick: () -> Unit = {},
     onVisitDoneClick: () -> Unit = {},
+    /** 띠에 안 보이는 나머지 계획 수. 0 보다 크면 '외 N곳' 이 붙는다 */
+    otherVisitCount: Int = 0,
+    onOtherVisitsClick: () -> Unit = {},
 ) {
     var personalized by remember { mutableStateOf(false) }
     // 장소를 고르면 아래 목록이 그 장소 카드(B2)로 바뀐다
@@ -131,8 +135,10 @@ fun MapScreen(
             VisitBanner(
                 placeName = visitPlan.place.name,
                 whenText = "${visitPlan.day.label} ${visitPlan.hour}시",
+                otherCount = otherVisitCount,
                 onClick = onVisitPlanClick,
                 onDoneClick = onVisitDoneClick,
+                onOtherClick = onOtherVisitsClick,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
             )
         }
@@ -185,13 +191,18 @@ fun MapScreen(
 /**
  * 방문을 확정한 장소가 있을 때 위쪽에 뜨는 띠.
  * 띠를 누르면 미리 보는 카드(출발하러 가는 길), '다녀왔어요' 는 다녀온 뒤 기록으로 가는 길이다
+ *
+ * 계획이 여러 개여도 가장 가까운 하나만 보여준다. 띠를 여러 줄 쌓으면 지도가 가려진다.
+ * 나머지가 있으면 둘째 줄 "예정된 방문 N곳 더 보기" 로 목록을 연다
  */
 @Composable
 private fun VisitBanner(
     placeName: String,
     whenText: String,
+    otherCount: Int,
     onClick: () -> Unit,
     onDoneClick: () -> Unit,
+    onOtherClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -202,13 +213,31 @@ private fun VisitBanner(
             .background(LineStrong)
             .padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(
-            text = "$placeName · $whenText 방문 예정 ›",
-            style = MaterialTheme.typography.bodySmall,
-            color = Paper,
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "$placeName · $whenText 방문 예정 ›",
+                style = MaterialTheme.typography.bodySmall,
+                color = Paper,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                // 둘째 줄은 글자가 작아 누르는 영역이 위로 넓어진다(최소 48dp).
+                // 첫 줄도 따로 누를 수 있게 해야 첫 줄을 눌렀을 때 둘째 줄로 가지 않는다
+                modifier = Modifier.pressFade(role = Role.Button, onClick = onClick),
+            )
+            // 첫 줄보다 덜 눈에 띄게 연한 글자
+            if (otherCount > 0) {
+                Text(
+                    text = "예정된 방문 ${otherCount}곳 더 보기 ›",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Line,
+                    modifier = Modifier
+                        .pressFade(role = Role.Button, onClick = onOtherClick)
+                        .padding(top = 2.dp, bottom = 2.dp),
+                )
+            }
+        }
         Box(
             modifier = Modifier
                 .pressFade(role = Role.Button, onClick = onDoneClick)
