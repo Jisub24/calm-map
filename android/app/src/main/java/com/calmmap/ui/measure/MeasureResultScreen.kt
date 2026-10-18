@@ -125,9 +125,14 @@ private fun whenLabel(result: MeasureResult): String {
     return "$day $time · $length"
 }
 
-/** "{ place: OO마트, labels: {안내방송:0.62, …}, db: 66, at: 14:12 }" */
+/**
+ * "{ place: OO마트, labels: {Speech:0.62, Music:0.21, …}, db: 66, at: 14:12 }"
+ * 실제로 보내는 YAMNet 원본 라벨을 점수 높은 5개까지 보여준다
+ */
 private fun payloadPreview(result: MeasureResult): String {
-    val labels = result.sounds.joinToString(", ") { String.format(Locale.US, "%s:%.2f", it.label, it.score) }
+    val top = result.rawLabels.entries.sortedByDescending { it.value }
+    val labels = top.take(5).joinToString(", ") { String.format(Locale.US, "%s:%.2f", it.key, it.value) } +
+        if (top.size > 5) ", …" else ""
     val time = "%02d:%02d".format(result.endedAt.hour, result.endedAt.minute)
     val flicker = result.flicker?.let { ", flicker: ${it.label}" }.orEmpty()
     return "{ place: ${result.place.name}, labels: {$labels}, db: ${result.db}$flicker, at: $time }"
@@ -143,6 +148,7 @@ private fun MeasureResultScreenPreview() {
                 countBefore = 12,
                 db = 66,
                 sounds = sampleSoundBase,
+                rawLabels = mapOf("Speech" to 0.48f, "Music" to 0.21f),
                 flicker = null,
                 endedAt = LocalDateTime.now(),
                 seconds = 60,

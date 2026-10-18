@@ -23,8 +23,10 @@ data class MeasureResult(
     val countBefore: Int,
     /** 측정하는 동안의 평균 소리 크기. 보정 전 상대값 */
     val db: Int,
-    /** 점수 높은 순 */
+    /** 소리 종류 5개의 평균 점수. 점수 높은 순. 화면용 */
     val sounds: List<SoundScore>,
+    /** YAMNet 원본 라벨의 평균 점수. 저장할 때는 이것을 보낸다 */
+    val rawLabels: Map<String, Float>,
     val flicker: FlickerAnswer?,
     val endedAt: LocalDateTime,
     val seconds: Int,
@@ -49,13 +51,11 @@ fun sampleMeasureCount(placeId: Long): Int = when (placeId % 4) {
 /** 측정 횟수가 이보다 적으면 '데이터 부족' */
 const val ENOUGH_MEASURES = 3
 
-/**
- * 측정 중 화면이 시작할 때의 소리 점수.
- * TODO: YAMNet 을 붙이면 지운다. 지금은 이 값 근처에서 조금씩 흔들리게 보여준다
- */
+/** 미리보기용 소리 점수 */
 val sampleSoundBase = listOf(
     SoundScore("안내방송", 0.62f),
     SoundScore("말소리", 0.45f),
     SoundScore("음악", 0.22f),
-    SoundScore("아기 울음", 0.05f),
+    SoundScore("기계음", 0.10f),
+    SoundScore("갑작스러운 소리", 0.05f),
 )

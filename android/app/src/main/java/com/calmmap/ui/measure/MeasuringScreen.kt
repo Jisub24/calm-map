@@ -1,5 +1,16 @@
 package com.calmmap.ui.measure
 
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -19,13 +30,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.app.ActivityCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.core.content.ContextCompat
+import com.calmmap.data.sound.SoundGroup
+import com.calmmap.data.sound.SoundMeter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -33,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calmmap.ui.component.FilterChip
 import com.calmmap.ui.components.PrimaryButton
+import com.calmmap.ui.components.SecondaryButton
 import com.calmmap.ui.components.TopBar
 import com.calmmap.ui.model.FlickerAnswer
 import com.calmmap.ui.model.MEASURE_SECONDS
@@ -41,7 +59,6 @@ import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.SoundScore
 import com.calmmap.ui.model.sampleMeasureCount
 import com.calmmap.ui.model.samplePlaces
-import com.calmmap.ui.model.sampleSoundBase
 import com.calmmap.ui.theme.CalmMapTheme
 import com.calmmap.ui.theme.Ink
 import com.calmmap.ui.theme.InkMuted
@@ -51,10 +68,10 @@ import com.calmmap.ui.theme.Paper
 import com.calmmap.ui.theme.PaperBox
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
-import kotlin.random.Random
+import kotlinx.coroutines.launch
 
-// D2 측정 중: 1분 동안 소리 크기와 소리 종류를 보여준다. 1분이 되면 저절로 끝난다
-// TODO: 지금은 예시 값이 조금씩 흔들리는 것. 마이크(dB)와 YAMNet 을 붙이면 실제 값으로
+// D2 측정 중: 1분 동안 마이크로 듣고 소리 크기와 소리 종류(YAMNet)를 보여준다
+// 1분이 되면 저절로 끝난다. 원래 소리는 분석만 하고 바로 버린다
 @Composable
 fun MeasuringScreen(
     place: PlaceUi,
@@ -62,20 +79,42 @@ fun MeasuringScreen(
     onFinish: (MeasureResult) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    var hasMic by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    // 권한 창에 답하기 전에는 안내 상자를 띄우지 않는다
+    var micAsked by remember { mutableStateOf(false) }
+    val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        hasMic = it
+        micAsked = true
+    }
+
     var seconds by remember { mutableIntStateOf(0) }
-    var db by remember { mutableIntStateOf(66) }
-    val sounds = remember { mutableStateListOf<SoundScore>().apply { addAll(sampleSoundBase) } }
-    // 평균을 내려고 매초 소리 크기를 모은다
-    val dbHistory = remember { mutableListOf<Int>() }
+    // 첫 1초가 분석되기 전에는 null
+    var db by remember { mutableStateOf<Int?>(null) }
+    var sounds by remember { mutableStateOf(SoundGroup.entries.map { SoundScore(it.label, 0f) }) }
     var flicker by remember { mutableStateOf<FlickerAnswer?>(null) }
+    // 끝날 때 평균을 내려고 매초 값을 더해 둔다
+    val dbHistory = remember { mutableListOf<Int>() }
+    val labelSums = remember { mutableMapOf<String, Float>() }
+    val groupSums = remember { mutableMapOf<SoundGroup, Float>() }
 
     fun finish() {
+        val n = dbHistory.size.coerceAtLeast(1)
         onFinish(
             MeasureResult(
                 place = place,
                 countBefore = sampleMeasureCount(place.id),
-                db = if (dbHistory.isEmpty()) db else dbHistory.average().toInt(),
-                sounds = sounds.sortedByDescending { it.score },
+                db = if (dbHistory.isEmpty()) 0 else dbHistory.average().toInt(),
+                sounds = SoundGroup.entries
+                    .map { SoundScore(it.label, (groupSums[it] ?: 0f) / n) }
+                    .sortedByDescending { it.score },
+                // 거의 안 들린 라벨(0.01 미만)은 뺀다
+                rawLabels = labelSums.mapValues { it.value / n }.filterValues { it >= 0.01f },
                 flicker = flicker,
                 endedAt = LocalDateTime.now(),
                 seconds = seconds,
@@ -83,16 +122,37 @@ fun MeasuringScreen(
         )
     }
 
-    // 1초마다 시간과 예시 값을 바꾼다
+    // 설정 화면에서 권한을 켜고 돌아왔을 때 알아채게 다시 확인한다
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        hasMic = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+    }
+
+    // 권한이 없으면 들어오자마자 묻는다
     LaunchedEffect(Unit) {
+        if (!hasMic) micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    // 권한이 생기면 듣기 시작. 화면을 나가면 마이크도 꺼진다
+    LaunchedEffect(hasMic) {
+        if (!hasMic) return@LaunchedEffect
+        launch {
+            @SuppressLint("MissingPermission") // 바로 위에서 권한을 확인했다
+            val readings = SoundMeter(context).readings()
+            readings.collect { reading ->
+                db = reading.db
+                dbHistory.add(reading.db)
+                reading.labelScores.forEach { (label, score) ->
+                    labelSums[label] = (labelSums[label] ?: 0f) + score
+                }
+                val groups = SoundGroup.scoresOf(reading.labelScores)
+                groups.forEach { (group, score) -> groupSums[group] = (groupSums[group] ?: 0f) + score }
+                sounds = SoundGroup.entries.map { SoundScore(it.label, groups[it] ?: 0f) }
+            }
+        }
         while (seconds < MEASURE_SECONDS) {
             delay(1000)
             seconds++
-            db = (db + Random.nextInt(-2, 3)).coerceIn(58, 74)
-            dbHistory.add(db)
-            sampleSoundBase.forEachIndexed { i, base ->
-                sounds[i] = base.copy(score = (base.score + Random.nextFloat() * 0.1f - 0.05f).coerceIn(0f, 1f))
-            }
         }
         finish()
     }
@@ -112,6 +172,24 @@ fun MeasuringScreen(
                 .padding(start = 20.dp, end = 20.dp, top = 4.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (micAsked && !hasMic) {
+                MicNeeded(
+                    onRetry = {
+                        // 한 번 거절하면 안드로이드가 권한 창을 더 띄워주지 않을 수 있다.
+                        // 그럴 때는 버튼이 아무 일도 안 하는 것처럼 보이니 앱 설정 화면을 연다
+                        val activity = context.findActivity()
+                        val canAsk = activity != null &&
+                            ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.RECORD_AUDIO)
+                        if (canAsk) {
+                            micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        } else {
+                            context.startActivity(
+                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)),
+                            )
+                        }
+                    },
+                )
+            }
             LoudnessBox(db = db)
             Text(
                 text = "지금 들리는 소리 (YAMNet)",
@@ -141,9 +219,31 @@ fun MeasuringScreen(
     }
 }
 
+// 마이크 권한을 거절했을 때
+@Composable
+private fun MicNeeded(onRetry: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(PaperBox)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(text = "마이크 권한이 있어야 측정할 수 있어요", style = MaterialTheme.typography.titleSmall, color = Ink)
+        Text(
+            text = "소리는 폰 안에서 분석만 하고 저장하지 않아요. 다시 물어보지 않으면 설정 > 앱 > 무던한 지도에서 켤 수 있어요.",
+            style = MaterialTheme.typography.bodySmall,
+            color = InkSoft,
+        )
+        SecondaryButton(text = "마이크 허용하기", onClick = onRetry)
+    }
+}
+
 // 상대 소리 크기를 크게
 @Composable
-private fun LoudnessBox(db: Int) {
+private fun LoudnessBox(db: Int?) {
     val shape = RoundedCornerShape(12.dp)
     Column(
         modifier = Modifier
@@ -156,7 +256,7 @@ private fun LoudnessBox(db: Int) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(text = "상대 소리 크기", style = MaterialTheme.typography.bodySmall, color = InkMuted)
-        Text(text = "$db dB", fontSize = 44.sp, lineHeight = 52.sp, fontWeight = FontWeight.Bold, color = Ink)
+        Text(text = if (db == null) "– dB" else "$db dB", fontSize = 44.sp, lineHeight = 52.sp, fontWeight = FontWeight.Bold, color = Ink)
         Text(text = "보정 전 값 · 같은 기기 비교용", style = MaterialTheme.typography.labelMedium, color = InkMuted)
     }
 }
@@ -185,6 +285,16 @@ private fun FlickerBox(answer: FlickerAnswer?, onAnswer: (FlickerAnswer) -> Unit
             }
         }
     }
+}
+
+// Compose 의 context 에서 화면(Activity)을 꺼낸다
+private fun Context.findActivity(): Activity? {
+    var current: Context? = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
 }
 
 /** 42 → "0:42" */
