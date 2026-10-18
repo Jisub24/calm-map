@@ -48,6 +48,7 @@ import com.calmmap.ui.component.SearchBar
 import com.calmmap.ui.component.outlineBorder
 import com.calmmap.ui.component.pressFade
 import com.calmmap.ui.model.PlaceUi
+import com.calmmap.ui.model.VisitPlan
 import com.calmmap.ui.model.samplePlaces
 import com.calmmap.ui.theme.Ink
 import com.calmmap.ui.theme.InkMuted
@@ -81,6 +82,10 @@ fun MapScreen(
     onPlaceClick: (PlaceUi) -> Unit = {},
     onMeasureClick: () -> Unit = {},
     onTabSelect: (MainTab) -> Unit = {},
+    /** 정해 둔 방문. 있으면 위쪽에 '방문 예정' 띠가 뜬다 */
+    visitPlan: VisitPlan? = null,
+    onVisitClick: (PlaceUi) -> Unit = {},
+    onVisitDoneClick: () -> Unit = {},
 ) {
     var personalized by remember { mutableStateOf(false) }
     // 장소를 고르면 아래 목록이 그 장소 카드(B2)로 바뀐다
@@ -120,10 +125,11 @@ fun MapScreen(
             }
         }
 
-        if (selectedPlace == null) {
+        if (selectedPlace == null && visitPlan != null) {
             VisitBanner(
-                placeName = "OO마트",
-                hour = 15,
+                placeName = visitPlan.place.name,
+                hour = visitPlan.hour,
+                onDoneClick = onVisitDoneClick,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
             )
         }
@@ -165,7 +171,7 @@ fun MapScreen(
                 place = picked,
                 nowHour = nowHour,
                 onDetailClick = { onPlaceClick(picked) },
-                onVisitClick = {},
+                onVisitClick = { onVisitClick(picked) },
             )
         }
 
@@ -175,7 +181,12 @@ fun MapScreen(
 
 /** 방문을 확정한 장소가 있을 때 위쪽에 뜨는 띠. 다녀온 뒤 기록으로 가는 길이다 */
 @Composable
-private fun VisitBanner(placeName: String, hour: Int, modifier: Modifier = Modifier) {
+private fun VisitBanner(
+    placeName: String,
+    hour: Int,
+    onDoneClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -192,7 +203,7 @@ private fun VisitBanner(placeName: String, hour: Int, modifier: Modifier = Modif
         )
         Box(
             modifier = Modifier
-                .pressFade(role = Role.Button) {}
+                .pressFade(role = Role.Button, onClick = onDoneClick)
                 .clip(RoundedCornerShape(6.dp))
                 .background(Paper)
                 .padding(horizontal = 10.dp, vertical = 6.dp),
