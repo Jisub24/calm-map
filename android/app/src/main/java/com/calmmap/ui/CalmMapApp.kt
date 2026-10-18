@@ -24,6 +24,7 @@ import com.calmmap.ui.search.SearchScreen
 import com.calmmap.ui.visit.AfterVisitScreen
 import com.calmmap.ui.visit.ChildViewScreen
 import com.calmmap.ui.visit.OnSiteScreen
+import com.calmmap.ui.visit.PlannedVisitsScreen
 import com.calmmap.ui.visit.VisitCardScreen
 import com.calmmap.ui.visit.VisitTimeScreen
 import java.time.LocalTime
@@ -34,7 +35,7 @@ private enum class Screen {
     // 방문 계획 흐름
     //   계획할 때: 시간 선택 → 지도 (방문 예정 띠가 생김)
     //   갈 때: 방문 예정 띠 → 미리 보는 카드 → (아이와 보기) → 현장 모드 → 방문 후 기록
-    VISIT_TIME, VISIT_CARD, VISIT_CHILD, VISIT_ONSITE, VISIT_AFTER,
+    VISIT_TIME, VISIT_CARD, VISIT_CHILD, VISIT_ONSITE, VISIT_AFTER, VISIT_PLANS,
 }
 
 /**
@@ -54,9 +55,15 @@ fun CalmMapApp() {
     var detailPlace by remember { mutableStateOf<PlaceUi?>(null) }
     val nowHour = remember { LocalTime.now().hour }
 
-    // 방문 시간을 고를 장소와, 시간까지 정한 방문
+    // 방문 시간을 고를 장소
     var visitPlace by remember { mutableStateOf<PlaceUi?>(null) }
-    var visitPlan by remember { mutableStateOf<VisitPlan?>(null) }
+    // 정해 둔 방문들. 가까운 시간이 앞에 오게 정렬해 둔다
+    // TODO: 저장하지 않아서 앱을 끄면 사라진다
+    val visitPlans = remember { mutableStateListOf<VisitPlan>() }
+    // 지금 카드 · 현장 모드 · 기록에서 다루는 방문
+    var activePlan by remember { mutableStateOf<VisitPlan?>(null) }
+    // 카드에서 뒤로 가면 돌아갈 곳 (지도 띠 또는 예정된 방문 목록)
+    var cardFrom by remember { mutableStateOf(Screen.MAP) }
     // 시간 선택에서 뒤로 가면 돌아갈 곳 (지도 카드 또는 장소 상세)
     var visitFrom by remember { mutableStateOf(Screen.MAP) }
     // TODO: visits 테이블에 저장하면 지금은 앱을 끄면 사라진다
@@ -66,6 +73,26 @@ fun CalmMapApp() {
         visitFrom = screen
         visitPlace = place
         screen = Screen.VISIT_TIME
+    }
+
+    // 같은 장소를 다시 정하면 이전 계획을 바꾼다
+    fun addPlan(plan: VisitPlan) {
+        visitPlans.removeAll { it.place.id == plan.place.id }
+        visitPlans.add(plan)
+        visitPlans.sortWith(compareBy({ it.day.date }, { it.hour }))
+    }
+
+    fun openPlan(plan: VisitPlan, to: Screen) {
+        activePlan = plan
+        cardFrom = screen
+        screen = to
+    }
+
+    // 다녀왔으면 그 계획만 빼고, 다음 계획이 띠에 올라온다
+    fun finishPlan(plan: VisitPlan) {
+        visitPlans.remove(plan)
+        activePlan = null
+        screen = Screen.MAP
     }
 
     fun openDetail(place: PlaceUi) {
@@ -88,7 +115,7 @@ fun CalmMapApp() {
         screen = when (screen) {
             Screen.DATA_INFO -> Screen.ME
             Screen.VISIT_TIME -> visitFrom
-            Screen.VISIT_CARD -> Screen.MAP
+            Screen.VISIT_CARD -> cardFrom
             Screen.VISIT_CHILD, Screen.VISIT_ONSITE -> Screen.VISIT_CARD
             else -> Screen.MAP
         }
@@ -99,10 +126,12 @@ fun CalmMapApp() {
             onSearchClick = { screen = Screen.SEARCH },
             onPlaceClick = { openDetail(it) },
             onTabSelect = { selectTab(it) },
-            visitPlan = visitPlan,
+            visitPlan = visitPlans.firstOrNull(),
+            otherVisitCount = (visitPlans.size - 1).coerceAtLeast(0),
             onVisitClick = { startVisit(it) },
-            onVisitPlanClick = { screen = Screen.VISIT_CARD },
-            onVisitDoneClick = { screen = Screen.VISIT_AFTER },
+            onVisitPlanClick = { visitPlans.firstOrNull()?.let { openPlan(it, Screen.VISIT_CARD) } },
+            onVisitDoneClick = { visitPlans.firstOrNull()?.let { openPlan(it, Screen.VISIT_AFTER) } },
+            onOtherVisitsClick = { screen = Screen.VISIT_PLANS },
         )
 
         Screen.SEARCH -> SearchScreen(
@@ -112,6 +141,12 @@ fun CalmMapApp() {
         )
 
         Screen.HISTORY -> VisitHistoryScreen(onTabSelect = { selectTab(it) }, visits = visits)
+
+        Screen.VISIT_PLANS -> PlannedVisitsScreen(
+            plans = visitPlans,
+            onBack = { screen = Screen.MAP },
+            onPlanClick = { openPlan(it, Screen.VISIT_CARD) },
+        )
 
         Screen.ME -> MyPageScreen(
             onTabSelect = { selectTab(it) },
@@ -135,7 +170,7 @@ fun CalmMapApp() {
                     nowHour = nowHour,
                     onBack = { screen = visitFrom },
                     onConfirm = { day, hour ->
-                        visitPlan = VisitPlan(place, day, hour)
+                        addPlan(VisitPlan(place, day, hour))
                         // 계획만 잡고 지도로. 갈 때 '방문 예정' 띠를 눌러 카드를 연다
                         screen = Screen.MAP
                     },
@@ -144,7 +179,7 @@ fun CalmMapApp() {
         }
 
         Screen.VISIT_CARD -> VisitCardScreen(
-            onBack = { screen = Screen.MAP },
+            onBack = { screen = cardFrom },
             onChildViewClick = { screen = Screen.VISIT_CHILD },
             onDepartClick = { screen = Screen.VISIT_ONSITE },
         )
@@ -152,19 +187,19 @@ fun CalmMapApp() {
         Screen.VISIT_CHILD -> ChildViewScreen(onClose = { screen = Screen.VISIT_CARD })
 
         Screen.VISIT_ONSITE -> OnSiteScreen(
-            placeName = visitPlan?.place?.name.orEmpty(),
+            placeName = activePlan?.place?.name.orEmpty(),
             onEndClick = { screen = Screen.VISIT_AFTER },
         )
 
         Screen.VISIT_AFTER -> {
-            val plan = visitPlan
+            val plan = activePlan
             if (plan == null) {
                 screen = Screen.MAP
             } else {
                 AfterVisitScreen(
                     placeName = plan.place.name,
                     whenLabel = plan.whenLabel,
-                    // 맨 위에 새 기록을 넣고 방문 예정을 지운다
+                    // 기록 탭 맨 위에 새 기록을 넣는다
                     // TODO: visits 테이블에 저장
                     onSubmit = { feeling, triggers ->
                         visits.add(
@@ -176,13 +211,9 @@ fun CalmMapApp() {
                                 trigger = triggers.joinToString(", ").ifEmpty { null },
                             ),
                         )
-                        visitPlan = null
-                        screen = Screen.MAP
+                        finishPlan(plan)
                     },
-                    onSkip = {
-                        visitPlan = null
-                        screen = Screen.MAP
-                    },
+                    onSkip = { finishPlan(plan) },
                 )
             }
         }
