@@ -43,6 +43,8 @@ import com.calmmap.ui.theme.PaperSoft
 // C2 미리 보는 카드: 가기 전에 아이와 같이 볼 순서 안내
 @Composable
 fun VisitCardScreen(
+    /** 어느 방문의 카드인지. "OO마트 · 내일 15:00" */
+    subtitle: String,
     onBack: () -> Unit,
     onChildViewClick: () -> Unit,
     onDepartClick: () -> Unit,
@@ -64,6 +66,8 @@ fun VisitCardScreen(
                 .padding(start = 20.dp, end = 20.dp, top = 4.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = InkMuted)
+
             // TODO: 입구 사진은 직접 찍거나 Storage 에서 받는다
             PhotoPlaceholder(text = "입구 사진", height = 150.dp)
 
@@ -135,6 +139,6 @@ private fun StepRow(text: String) {
 @Composable
 private fun VisitCardScreenPreview() {
     CalmMapTheme {
-        VisitCardScreen(onBack = {}, onChildViewClick = {}, onDepartClick = {})
+        VisitCardScreen(subtitle = "OO마트 · 오늘 15:00", onBack = {}, onChildViewClick = {}, onDepartClick = {})
     }
 }

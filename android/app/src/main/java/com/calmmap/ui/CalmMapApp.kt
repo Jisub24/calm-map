@@ -179,6 +179,7 @@ fun CalmMapApp() {
         }
 
         Screen.VISIT_CARD -> VisitCardScreen(
+            subtitle = activePlan?.let { "${it.place.name} · ${it.whenLabel}" }.orEmpty(),
             onBack = { screen = cardFrom },
             onChildViewClick = { screen = Screen.VISIT_CHILD },
             onDepartClick = { screen = Screen.VISIT_ONSITE },
