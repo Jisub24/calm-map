@@ -27,7 +27,8 @@ import com.calmmap.ui.components.SecondaryButton
 import com.calmmap.ui.theme.CalmMapTheme
 
 // A3 로그인: 카카오 로그인 또는 게스트로 시작. 어느 쪽이든 끝나면 위치 권한 화면으로 간다
-// TODO: 실제 로그인은 Supabase Auth 로 붙인다 (카카오: signInWithOAuth, 게스트: signInAnonymously)
+// 카카오 로그인 처리는 MainActivity 에 있다
+// TODO: 게스트 로그인은 Supabase Auth signInAnonymously 로 붙인다
 @Composable
 fun LoginScreen(
     onKakaoClick: () -> Unit,

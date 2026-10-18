@@ -37,12 +37,26 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.CalmMap"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- 카카오 로그인 후 브라우저가 calmmap://login 으로 앱을 다시 연다.
+                 singleTask 라서 새 화면을 띄우지 않고 지금 화면(onNewIntent)으로 돌아온다 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="login"
+                    android:scheme="calmmap" />
             </intent-filter>
         </activity>
     </application>
