@@ -45,7 +45,9 @@ private fun SoundBar(sound: SoundScore) {
             text = sound.label,
             style = MaterialTheme.typography.bodyMedium,
             color = Ink,
-            modifier = Modifier.width(80.dp),
+            // "갑작스러운 소리" 가 한 줄에 들어가는 너비
+            maxLines = 1,
+            modifier = Modifier.width(104.dp),
         )
         Box(
             modifier = Modifier

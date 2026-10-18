@@ -12,6 +12,7 @@ naverMap = "3.24.0"
 # supabase-kt 3.7 부터는 Kotlin 2.4 로 빌드돼서 지금 Kotlin(2.2)과 맞는 3.2 를 쓴다
 supabase = "3.2.6"
 ktor = "3.3.1"
+mediapipe = "1.1.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -33,6 +34,7 @@ naver-map-sdk = { group = "com.naver.maps", name = "map-sdk", version.ref = "nav
 supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabase" }
 supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
+mediapipe-tasks-audio = { group = "com.google.mediapipe", name = "tasks-audio", version.ref = "mediapipe" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

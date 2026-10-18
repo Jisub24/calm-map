@@ -1,7 +1,6 @@
 package com.calmmap.ui.measure
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,10 +28,8 @@ import com.calmmap.ui.theme.CalmMapTheme
 import com.calmmap.ui.theme.Ink
 import com.calmmap.ui.theme.InkMuted
 import com.calmmap.ui.theme.InkSoft
-import com.calmmap.ui.theme.LineSoft
 import com.calmmap.ui.theme.Paper
 import com.calmmap.ui.theme.PaperBox
-import com.calmmap.ui.theme.PaperSoft
 import java.time.LocalDateTime
 import java.time.format.TextStyle
 import java.util.Locale
@@ -81,20 +78,6 @@ fun MeasureResultScreen(
 
             SectionLabel("주요 소리")
             SoundBars(sounds = top)
-
-            // 무엇이 나가는지 보호자가 직접 확인할 수 있게 그대로 보여준다
-            SectionLabel("보낼 데이터")
-            Text(
-                text = payloadPreview(result),
-                style = MaterialTheme.typography.labelMedium,
-                color = InkSoft,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(PaperSoft)
-                    .border(1.dp, LineSoft, RoundedCornerShape(12.dp))
-                    .padding(14.dp),
-            )
             Text(
                 text = "이 장소 측정 ${result.countBefore}회 → ${result.countBefore + 1}회. 시간대 예측이 더 정확해져요.",
                 style = MaterialTheme.typography.bodySmall,
@@ -125,14 +108,6 @@ private fun whenLabel(result: MeasureResult): String {
     return "$day $time · $length"
 }
 
-/** "{ place: OO마트, labels: {안내방송:0.62, …}, db: 66, at: 14:12 }" */
-private fun payloadPreview(result: MeasureResult): String {
-    val labels = result.sounds.joinToString(", ") { String.format(Locale.US, "%s:%.2f", it.label, it.score) }
-    val time = "%02d:%02d".format(result.endedAt.hour, result.endedAt.minute)
-    val flicker = result.flicker?.let { ", flicker: ${it.label}" }.orEmpty()
-    return "{ place: ${result.place.name}, labels: {$labels}, db: ${result.db}$flicker, at: $time }"
-}
-
 @Preview(showBackground = true, widthDp = 360, heightDp = 800)
 @Composable
 private fun MeasureResultScreenPreview() {
@@ -143,6 +118,7 @@ private fun MeasureResultScreenPreview() {
                 countBefore = 12,
                 db = 66,
                 sounds = sampleSoundBase,
+                rawLabels = mapOf("Speech" to 0.48f, "Music" to 0.21f),
                 flicker = null,
                 endedAt = LocalDateTime.now(),
                 seconds = 60,

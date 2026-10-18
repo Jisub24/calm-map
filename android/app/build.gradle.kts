@@ -72,6 +72,8 @@ dependencies {
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.auth)
     implementation(libs.ktor.client.okhttp)
+    // YAMNet 을 폰 안에서 돌린다 (모델: src/main/assets/yamnet.tflite)
+    implementation(libs.mediapipe.tasks.audio)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
