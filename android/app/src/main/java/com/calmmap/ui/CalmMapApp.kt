@@ -31,7 +31,9 @@ import java.time.LocalTime
 /** 지금 보여줄 화면 */
 private enum class Screen {
     MAP, SEARCH, DETAIL, HISTORY, ME, DATA_INFO,
-    // 방문 계획 흐름: 시간 선택 → 미리 보는 카드 → (아이와 보기) → 현장 모드 → 방문 후 기록
+    // 방문 계획 흐름
+    //   계획할 때: 시간 선택 → 지도 (방문 예정 띠가 생김)
+    //   갈 때: 방문 예정 띠 → 미리 보는 카드 → (아이와 보기) → 현장 모드 → 방문 후 기록
     VISIT_TIME, VISIT_CARD, VISIT_CHILD, VISIT_ONSITE, VISIT_AFTER,
 }
 
@@ -86,7 +88,7 @@ fun CalmMapApp() {
         screen = when (screen) {
             Screen.DATA_INFO -> Screen.ME
             Screen.VISIT_TIME -> visitFrom
-            Screen.VISIT_CARD -> Screen.VISIT_TIME
+            Screen.VISIT_CARD -> Screen.MAP
             Screen.VISIT_CHILD, Screen.VISIT_ONSITE -> Screen.VISIT_CARD
             else -> Screen.MAP
         }
@@ -99,6 +101,7 @@ fun CalmMapApp() {
             onTabSelect = { selectTab(it) },
             visitPlan = visitPlan,
             onVisitClick = { startVisit(it) },
+            onVisitPlanClick = { screen = Screen.VISIT_CARD },
             onVisitDoneClick = { screen = Screen.VISIT_AFTER },
         )
 
@@ -133,14 +136,15 @@ fun CalmMapApp() {
                     onBack = { screen = visitFrom },
                     onConfirm = { day, hour ->
                         visitPlan = VisitPlan(place, day, hour)
-                        screen = Screen.VISIT_CARD
+                        // 계획만 잡고 지도로. 갈 때 '방문 예정' 띠를 눌러 카드를 연다
+                        screen = Screen.MAP
                     },
                 )
             }
         }
 
         Screen.VISIT_CARD -> VisitCardScreen(
-            onBack = { screen = Screen.VISIT_TIME },
+            onBack = { screen = Screen.MAP },
             onChildViewClick = { screen = Screen.VISIT_CHILD },
             onDepartClick = { screen = Screen.VISIT_ONSITE },
         )

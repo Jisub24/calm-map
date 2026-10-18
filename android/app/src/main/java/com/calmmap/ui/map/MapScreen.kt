@@ -85,6 +85,8 @@ fun MapScreen(
     /** 정해 둔 방문. 있으면 위쪽에 '방문 예정' 띠가 뜬다 */
     visitPlan: VisitPlan? = null,
     onVisitClick: (PlaceUi) -> Unit = {},
+    /** 방문 예정 띠를 눌렀을 때. 미리 보는 카드를 연다 */
+    onVisitPlanClick: () -> Unit = {},
     onVisitDoneClick: () -> Unit = {},
 ) {
     var personalized by remember { mutableStateOf(false) }
@@ -128,7 +130,8 @@ fun MapScreen(
         if (selectedPlace == null && visitPlan != null) {
             VisitBanner(
                 placeName = visitPlan.place.name,
-                hour = visitPlan.hour,
+                whenText = "${visitPlan.day.label} ${visitPlan.hour}시",
+                onClick = onVisitPlanClick,
                 onDoneClick = onVisitDoneClick,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
             )
@@ -179,17 +182,22 @@ fun MapScreen(
     }
 }
 
-/** 방문을 확정한 장소가 있을 때 위쪽에 뜨는 띠. 다녀온 뒤 기록으로 가는 길이다 */
+/**
+ * 방문을 확정한 장소가 있을 때 위쪽에 뜨는 띠.
+ * 띠를 누르면 미리 보는 카드(출발하러 가는 길), '다녀왔어요' 는 다녀온 뒤 기록으로 가는 길이다
+ */
 @Composable
 private fun VisitBanner(
     placeName: String,
-    hour: Int,
+    whenText: String,
+    onClick: () -> Unit,
     onDoneClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .pressFade(role = Role.Button, onClick = onClick)
             .clip(RoundedCornerShape(8.dp))
             .background(LineStrong)
             .padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
@@ -197,7 +205,7 @@ private fun VisitBanner(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            text = "$placeName · ${hour}시 방문 예정",
+            text = "$placeName · $whenText 방문 예정 ›",
             style = MaterialTheme.typography.bodySmall,
             color = Paper,
         )
