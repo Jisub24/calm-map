@@ -1,5 +1,6 @@
 package com.calmmap.ui
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -7,10 +8,15 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import com.calmmap.ui.component.MainTab
 import com.calmmap.ui.detail.NoDataScreen
 import com.calmmap.ui.detail.PlaceDetailScreen
 import com.calmmap.ui.map.MapScreen
+import com.calmmap.ui.measure.MeasurePlaceScreen
+import com.calmmap.ui.measure.MeasureResultScreen
+import com.calmmap.ui.measure.MeasuringScreen
+import com.calmmap.ui.model.MeasureResult
 import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.VisitPlan
 import com.calmmap.ui.model.VisitUi
@@ -36,6 +42,8 @@ private enum class Screen {
     //   계획할 때: 시간 선택 → 지도 (방문 예정 띠가 생김)
     //   갈 때: 방문 예정 띠 → 미리 보는 카드 → (아이와 보기) → 현장 모드 → 방문 후 기록
     VISIT_TIME, VISIT_CARD, VISIT_CHILD, VISIT_ONSITE, VISIT_AFTER, VISIT_PLANS,
+    // 측정 흐름: (장소 선택) → 측정 중 → 측정 결과
+    MEASURE_PLACE, MEASURE_RUN, MEASURE_RESULT,
 }
 
 /**
@@ -95,6 +103,19 @@ fun CalmMapApp() {
         screen = Screen.MAP
     }
 
+    // 측정할 장소, 끝난 측정, 측정을 시작한 곳 (끝나면 여기로 돌아간다)
+    var measurePlace by remember { mutableStateOf<PlaceUi?>(null) }
+    var measureResult by remember { mutableStateOf<MeasureResult?>(null) }
+    var measureFrom by remember { mutableStateOf(Screen.MAP) }
+    val context = LocalContext.current
+
+    // 장소 상세에서는 장소가 정해져 있어서 바로 측정 중으로
+    fun startMeasure(place: PlaceUi?) {
+        measureFrom = screen
+        measurePlace = place
+        screen = if (place == null) Screen.MEASURE_PLACE else Screen.MEASURE_RUN
+    }
+
     fun openDetail(place: PlaceUi) {
         detailPlace = place
         screen = Screen.DETAIL
@@ -116,6 +137,9 @@ fun CalmMapApp() {
             Screen.DATA_INFO -> Screen.ME
             Screen.VISIT_TIME -> visitFrom
             Screen.VISIT_CARD -> cardFrom
+            // 측정 중에 뒤로 가면 측정을 버린다. 지도에서 시작했으면 장소 선택으로
+            Screen.MEASURE_RUN -> if (measureFrom == Screen.MAP) Screen.MEASURE_PLACE else measureFrom
+            Screen.MEASURE_PLACE, Screen.MEASURE_RESULT -> measureFrom
             Screen.VISIT_CHILD, Screen.VISIT_ONSITE -> Screen.VISIT_CARD
             else -> Screen.MAP
         }
@@ -132,6 +156,7 @@ fun CalmMapApp() {
             onVisitPlanClick = { visitPlans.firstOrNull()?.let { openPlan(it, Screen.VISIT_CARD) } },
             onVisitDoneClick = { visitPlans.firstOrNull()?.let { openPlan(it, Screen.VISIT_AFTER) } },
             onOtherVisitsClick = { screen = Screen.VISIT_PLANS },
+            onMeasureClick = { startMeasure(null) },
         )
 
         Screen.SEARCH -> SearchScreen(
@@ -225,6 +250,55 @@ fun CalmMapApp() {
             }
         }
 
+        Screen.MEASURE_PLACE -> MeasurePlaceScreen(
+            onBack = { screen = measureFrom },
+            onPlaceClick = {
+                measurePlace = it
+                screen = Screen.MEASURE_RUN
+            },
+            // TODO: 검색 화면에서 고른 장소로 측정하게 연결
+            onSearchClick = {},
+        )
+
+        Screen.MEASURE_RUN -> {
+            val place = measurePlace
+            if (place == null) {
+                screen = measureFrom
+            } else {
+                MeasuringScreen(
+                    place = place,
+                    onBack = {
+                        screen = if (measureFrom == Screen.MAP) Screen.MEASURE_PLACE else measureFrom
+                    },
+                    onFinish = {
+                        measureResult = it
+                        screen = Screen.MEASURE_RESULT
+                    },
+                )
+            }
+        }
+
+        Screen.MEASURE_RESULT -> {
+            val result = measureResult
+            if (result == null) {
+                screen = measureFrom
+            } else {
+                MeasureResultScreen(
+                    result = result,
+                    // TODO: measurements 테이블에 저장
+                    onSave = {
+                        Toast.makeText(context, "측정을 저장했어요", Toast.LENGTH_SHORT).show()
+                        measureResult = null
+                        screen = measureFrom
+                    },
+                    onDiscard = {
+                        measureResult = null
+                        screen = measureFrom
+                    },
+                )
+            }
+        }
+
         Screen.DETAIL -> {
             val place = detailPlace
             val detail = place?.let { sampleDetailFor(it.id) }
@@ -247,7 +321,7 @@ fun CalmMapApp() {
                     detail = detail,
                     nowHour = nowHour,
                     onBack = { screen = Screen.MAP },
-                    onMeasureClick = {},
+                    onMeasureClick = { startMeasure(place) },
                     onVisitClick = { startVisit(place) },
                 )
             }
