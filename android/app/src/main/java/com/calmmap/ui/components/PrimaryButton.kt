@@ -19,14 +19,19 @@ fun PrimaryButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Button(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
+        enabled = enabled,
         shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = Color(0xFF333333),
             contentColor = Color.White,
+            // 누를 수 없을 때는 옅게
+            disabledContainerColor = Color(0xFFD9D9D9),
+            disabledContentColor = Color.White,
         ),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
     ) {
