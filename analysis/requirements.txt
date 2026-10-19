@@ -1,0 +1,11 @@
+# analysis 실행에 필요한 Python 라이브러리
+#   python -m pip install -r analysis/requirements.txt
+
+# 앱(com.google.mediapipe:tasks-audio 1.1.1)과 같은 버전이어야 YAMNet 결과가 같다
+mediapipe==1.1.1
+# m4a 읽기. ffmpeg 를 따로 설치하지 않아도 된다
+av
+numpy
+# mediapipe 가 numpy 2 를 깔아서 pandas 도 2.2.3 이상이어야 한다
+pandas>=2.2.3
+matplotlib
