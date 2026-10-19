@@ -49,3 +49,7 @@ supabase/.branches/
 # ---- OS ----
 .DS_Store
 Thumbs.db
+
+# ---- 조도 원본 (조도 앱에서 내보낸 파일) ----
+analysis/lux/*
+!analysis/lux/.gitkeep
