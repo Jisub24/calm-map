@@ -25,9 +25,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.calmmap.ui.components.PrimaryButton
-import com.calmmap.ui.components.SecondaryButton
-import com.calmmap.ui.components.TopBar
+import com.calmmap.ui.component.PrimaryButton
+import com.calmmap.ui.component.SecondaryButton
+import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.theme.CalmMapTheme
 
 // 아이가 힘들어할 수 있는 감각 요인. group 은 화면에서 묶어 보여줄 제목

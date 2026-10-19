@@ -35,9 +35,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.calmmap.ui.component.outlineBorder
 import com.calmmap.ui.component.pressFade
-import com.calmmap.ui.components.PrimaryButton
-import com.calmmap.ui.components.SecondaryButton
-import com.calmmap.ui.components.TopBar
+import com.calmmap.ui.component.PrimaryButton
+import com.calmmap.ui.component.SecondaryButton
+import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.model.CardStep
 import com.calmmap.ui.model.sampleCardSteps
 import com.calmmap.ui.theme.CalmMapTheme

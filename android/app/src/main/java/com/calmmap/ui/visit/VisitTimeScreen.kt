@@ -31,8 +31,8 @@ import androidx.compose.ui.unit.dp
 import com.calmmap.ui.component.FilterChip
 import com.calmmap.ui.component.HourlyBarChart
 import com.calmmap.ui.component.pressFade
-import com.calmmap.ui.components.PrimaryButton
-import com.calmmap.ui.components.TopBar
+import com.calmmap.ui.component.PrimaryButton
+import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.VisitDay
 import com.calmmap.ui.model.samplePlaces

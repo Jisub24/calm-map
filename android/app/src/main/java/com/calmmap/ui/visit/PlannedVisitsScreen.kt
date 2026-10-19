@@ -20,7 +20,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.calmmap.ui.component.bottomLine
 import com.calmmap.ui.component.pressFade
-import com.calmmap.ui.components.TopBar
+import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.model.VisitPlan
 import com.calmmap.ui.model.samplePlaces
 import com.calmmap.ui.model.upcomingVisitDays
