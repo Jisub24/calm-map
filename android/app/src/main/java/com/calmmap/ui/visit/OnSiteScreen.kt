@@ -23,8 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.calmmap.ui.components.SecondaryButton
-import com.calmmap.ui.components.TopBar
+import com.calmmap.ui.component.SecondaryButton
+import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.model.QuietSpot
 import com.calmmap.ui.model.sampleQuietSpots
 import com.calmmap.ui.theme.CalmMapTheme

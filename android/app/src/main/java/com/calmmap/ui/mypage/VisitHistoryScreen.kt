@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.calmmap.ui.component.BottomTabBar
 import com.calmmap.ui.component.MainTab
 import com.calmmap.ui.component.bottomLine
-import com.calmmap.ui.components.TopBar
+import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.model.VisitFeeling
 import com.calmmap.ui.model.VisitUi
 import com.calmmap.ui.model.sampleVisits

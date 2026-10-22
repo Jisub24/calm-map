@@ -313,7 +313,7 @@ fun CalmMapApp() {
                     place = place,
                     info = noData,
                     onBack = { screen = Screen.MAP },
-                    onMeasureClick = {},
+                    onMeasureClick = { startMeasure(place) },
                 )
 
                 else -> PlaceDetailScreen(

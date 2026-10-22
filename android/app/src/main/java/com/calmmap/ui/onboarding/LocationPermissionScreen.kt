@@ -25,8 +25,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.calmmap.ui.components.PrimaryButton
-import com.calmmap.ui.components.SecondaryButton
+import com.calmmap.ui.component.PrimaryButton
+import com.calmmap.ui.component.SecondaryButton
 import com.calmmap.ui.theme.CalmMapTheme
 
 // A4 위치 권한: 왜 위치가 필요한지 설명하고 권한을 요청한다

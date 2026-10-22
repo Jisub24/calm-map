@@ -18,9 +18,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.calmmap.ui.components.PrimaryButton
-import com.calmmap.ui.components.SecondaryButton
-import com.calmmap.ui.components.TopBar
+import com.calmmap.ui.component.PrimaryButton
+import com.calmmap.ui.component.SecondaryButton
+import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.model.MeasureResult
 import com.calmmap.ui.model.sampleSoundBase
 import com.calmmap.ui.model.samplePlaces

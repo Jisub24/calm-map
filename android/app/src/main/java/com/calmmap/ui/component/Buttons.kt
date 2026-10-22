@@ -3,6 +3,7 @@ package com.calmmap.ui.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.calmmap.ui.theme.Ink
 import com.calmmap.ui.theme.InkMuted
 import com.calmmap.ui.theme.Line
+import com.calmmap.ui.theme.LineSoft
 import com.calmmap.ui.theme.LineStrong
 import com.calmmap.ui.theme.Paper
 
@@ -30,9 +32,11 @@ import com.calmmap.ui.theme.Paper
  * 높이를 48dp 로 둔 것은 손가락으로 누를 수 있는 최소 크기(44dp)보다
  * 크게 잡기 위해서다. 보호자가 아이를 안고 한 손으로 쓰는 상황을 생각하면
  * 더 작게 만들 수 없다.
+ *
+ * 기본으로 가로를 꽉 채운다. 두 개를 나란히 둘 때는 Modifier.weight(1f) 를 넘긴다.
  */
 
-private val Shape = RoundedCornerShape(8.dp)
+private val Shape = RoundedCornerShape(12.dp)
 
 /** 주된 동작. 방문 계획 · 측정 요청 */
 @Composable
@@ -40,18 +44,21 @@ fun PrimaryButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Box(
         modifier = modifier
+            .fillMaxWidth()
             .height(48.dp)
-            .pressFade(role = Role.Button, onClick = onClick)
+            .pressFade(role = Role.Button, enabled = enabled, onClick = onClick)
             .clip(Shape)
-            .background(LineStrong),
+            // 누를 수 없을 때는 옅게
+            .background(if (enabled) LineStrong else LineSoft),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Medium,
             color = Paper,
         )
@@ -64,20 +71,23 @@ fun SecondaryButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Box(
         modifier = modifier
+            .fillMaxWidth()
             .height(48.dp)
-            .pressFade(role = Role.Button, onClick = onClick)
+            .pressFade(role = Role.Button, enabled = enabled, onClick = onClick)
             .clip(Shape)
-            .outlineBorder(LineStrong, Shape),
+            .background(Paper)
+            .outlineBorder(if (enabled) LineStrong else Line, Shape),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Medium,
-            color = Ink,
+            color = if (enabled) Ink else InkMuted,
         )
     }
 }

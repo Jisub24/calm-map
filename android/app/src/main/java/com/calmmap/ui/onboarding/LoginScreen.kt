@@ -22,8 +22,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.calmmap.ui.components.PrimaryButton
-import com.calmmap.ui.components.SecondaryButton
+import com.calmmap.ui.component.PrimaryButton
+import com.calmmap.ui.component.SecondaryButton
 import com.calmmap.ui.theme.CalmMapTheme
 
 // A3 로그인: 카카오 로그인 또는 게스트로 시작. 어느 쪽이든 끝나면 위치 권한 화면으로 간다

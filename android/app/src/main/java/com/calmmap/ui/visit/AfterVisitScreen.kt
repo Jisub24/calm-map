@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.calmmap.ui.component.FilterChip
 import com.calmmap.ui.component.outlineBorder
 import com.calmmap.ui.component.pressFade
-import com.calmmap.ui.components.PrimaryButton
+import com.calmmap.ui.component.PrimaryButton
 import com.calmmap.ui.model.VisitFeeling
 import com.calmmap.ui.model.visitTriggers
 import com.calmmap.ui.theme.CalmMapTheme

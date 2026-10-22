@@ -29,7 +29,7 @@ import com.calmmap.ui.component.BottomTabBar
 import com.calmmap.ui.component.MainTab
 import com.calmmap.ui.component.bottomLine
 import com.calmmap.ui.component.pressFade
-import com.calmmap.ui.components.TopBar
+import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.onboarding.SensoryFactor
 import com.calmmap.ui.theme.CalmMapTheme
 import com.calmmap.ui.theme.Ink
