@@ -16,6 +16,17 @@ enum class FlickerAnswer(val label: String) {
     UNKNOWN("모르겠어요"),
 }
 
+/**
+ * '방송 나왔어요'를 한 번도 안 눌렀을 때 결과 화면에서 고르는 답.
+ *
+ * 안 눌렀다고 0번으로 넣으면 '방송이 없는 곳'이 된다. 신경 쓰지 못한 측정과 구분해야 한다.
+ */
+enum class AnnounceAnswer(val label: String) {
+    YES("있었어요"),
+    NO("없었어요"),
+    UNKNOWN("잘 모르겠어요"),
+}
+
 /** 측정이 끝난 뒤 결과 화면에 보여주고 저장할 값 */
 data class MeasureResult(
     val place: PlaceUi,
@@ -30,7 +41,23 @@ data class MeasureResult(
     val flicker: FlickerAnswer?,
     val endedAt: LocalDateTime,
     val seconds: Int,
+    /** 측정 중에 '방송 나왔어요'를 누른 횟수. YAMNet 은 안내 목소리와 대화를 구분하지 못한다 */
+    val announceTaps: Int = 0,
+    /** 한 번도 안 눌렀을 때만 결과 화면에서 받는 답 */
+    val announceAnswer: AnnounceAnswer? = null,
 ) {
+    /**
+     * 저장할 안내방송 횟수. null 이면 미측정.
+     * '있었어요'는 몇 번인지 몰라서 최소인 1번으로 센다
+     */
+    val announceCount: Int?
+        get() = when {
+            announceTaps > 0 -> announceTaps
+            announceAnswer == AnnounceAnswer.YES -> 1
+            announceAnswer == AnnounceAnswer.NO -> 0
+            else -> null
+        }
+
     // TODO: 실제 점수 계산은 batch 쪽 규칙을 따른다. 지금은 화면 확인용으로 소리 크기만 본다
     val level: SensoryLevel
         get() = when {

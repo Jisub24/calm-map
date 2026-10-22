@@ -98,6 +98,9 @@ fun MeasuringScreen(
     var db by remember { mutableStateOf<Int?>(null) }
     var sounds by remember { mutableStateOf(SoundGroup.entries.map { SoundScore(it.label, 0f) }) }
     var flicker by remember { mutableStateOf<FlickerAnswer?>(null) }
+    var announceTaps by remember { mutableIntStateOf(0) }
+    // 마지막으로 센 때. 방송 한 번에 여러 번 눌러도 한 번으로 센다
+    var lastAnnounceAt by remember { mutableIntStateOf(-ANNOUNCE_MERGE_SEC) }
     // 끝날 때 평균을 내려고 매초 값을 더해 둔다
     val dbHistory = remember { mutableListOf<Int>() }
     val labelSums = remember { mutableMapOf<String, Float>() }
@@ -118,6 +121,7 @@ fun MeasuringScreen(
                 flicker = flicker,
                 endedAt = LocalDateTime.now(),
                 seconds = seconds,
+                announceTaps = announceTaps,
             ),
         )
     }
@@ -198,6 +202,15 @@ fun MeasuringScreen(
                 color = InkSoft,
             )
             SoundBars(sounds = sounds)
+            AnnounceBox(
+                taps = announceTaps,
+                onTap = {
+                    if (seconds - lastAnnounceAt >= ANNOUNCE_MERGE_SEC) {
+                        announceTaps++
+                        lastAnnounceAt = seconds
+                    }
+                },
+            )
             FlickerBox(answer = flicker, onAnswer = { flicker = it })
             Text(text = "🔒 소리 종류·크기·시각만 전송해요", style = MaterialTheme.typography.bodySmall, color = InkMuted)
         }
@@ -258,6 +271,39 @@ private fun LoudnessBox(db: Int?) {
         Text(text = "상대 소리 크기", style = MaterialTheme.typography.bodySmall, color = InkMuted)
         Text(text = if (db == null) "– dB" else "$db dB", fontSize = 44.sp, lineHeight = 52.sp, fontWeight = FontWeight.Bold, color = Ink)
         Text(text = "보정 전 값 · 같은 기기 비교용", style = MaterialTheme.typography.labelMedium, color = InkMuted)
+    }
+}
+
+/** 이 안에 또 누르면 같은 방송으로 본다. 안내 한 번이 보통 5초쯤이다 */
+private const val ANNOUNCE_MERGE_SEC = 5
+
+// 안내방송은 YAMNet 이 대화와 구분하지 못해서 직접 누른다
+@Composable
+private fun AnnounceBox(taps: Int, onTap: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .border(1.dp, LineSoft, shape)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "안내방송이 나오면 눌러주세요 (수동 입력)",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = Ink,
+        )
+        SecondaryButton(
+            text = if (taps == 0) "방송 나왔어요" else "방송 나왔어요 · ${taps}번",
+            onClick = onTap,
+        )
+        Text(
+            text = "방송 한 번에 한 번만 세요. 5초 안에 다시 누르면 같은 방송으로 봐요.",
+            style = MaterialTheme.typography.labelMedium,
+            color = InkMuted,
+        )
     }
 }
 
