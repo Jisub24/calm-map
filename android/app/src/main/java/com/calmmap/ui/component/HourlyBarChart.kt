@@ -32,12 +32,21 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.sp
+import com.calmmap.ui.theme.LevelMid
+import com.calmmap.ui.theme.TextSecondary
+import com.calmmap.ui.theme.caption
 import com.calmmap.ui.model.HourBar
-import com.calmmap.ui.theme.Ink
-import com.calmmap.ui.theme.InkMuted
-import com.calmmap.ui.theme.Line
-import com.calmmap.ui.theme.LineMid
-import com.calmmap.ui.theme.Paper
+import com.calmmap.ui.theme.TextPrimary
+import com.calmmap.ui.theme.TextTertiary
+import com.calmmap.ui.theme.BorderStrong
+import com.calmmap.ui.theme.LevelOutline
+import com.calmmap.ui.theme.BgSurface
+import com.calmmap.ui.theme.BrandPrimary
+import com.calmmap.ui.theme.Radius
+import com.calmmap.ui.theme.Shadows
+import com.calmmap.ui.theme.axis
 import kotlin.math.roundToInt
 
 /**
@@ -66,13 +75,15 @@ fun HourlyBarChart(
     /** 지금 누른 시각. 말풍선이 뜨고 그 막대에 테두리가 생긴다 */
     selectedHour: Int? = null,
     onBarClick: (HourBar) -> Unit = {},
+    /** 시간을 '고르는' 그래프인지 (방문 시간 선택). 말풍선 대신 고른 막대 위에 '선택' 표시 */
+    pickMode: Boolean = false,
 ) {
     val barHeight: Dp = if (compact) 54.dp else 104.dp
     val gap: Dp = if (compact) 3.dp else 4.dp
     val selectedIndex = bars.indexOfFirst { it.hour == selectedHour }.takeIf { it >= 0 }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        if (selectedIndex != null) {
+        if (selectedIndex != null && !pickMode) {
             Tooltip(
                 bar = bars[selectedIndex],
                 index = selectedIndex,
@@ -85,7 +96,7 @@ fun HourlyBarChart(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(barHeight)
-                .let { if (compact) it else it.bottomLine(Line) },
+                .let { if (compact) it else it.bottomLine(BorderStrong) },
             horizontalArrangement = Arrangement.spacedBy(gap),
             verticalAlignment = Alignment.Bottom,
         ) {
@@ -94,6 +105,7 @@ fun HourlyBarChart(
                     bar = bar,
                     maxHeight = barHeight,
                     isSelected = bar.hour == selectedHour,
+                    pickMode = pickMode,
                     onClick = { onBarClick(bar) },
                     modifier = Modifier.weight(1f),
                 )
@@ -115,10 +127,12 @@ private fun BarSlot(
     bar: HourBar,
     maxHeight: Dp,
     isSelected: Boolean,
+    pickMode: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(2.dp)
+    // 최종안 그래프 막대 모서리 4
+    val shape = Radius.bar
 
     Column(
         modifier = modifier
@@ -144,10 +158,12 @@ private fun BarSlot(
                     .fillMaxWidth()
                     .height((maxHeight * 0.28f).coerceAtLeast(20.dp))
                     .clip(shape)
+                    .background(BgSurface)
                     .outlineBorder(
-                        color = if (isSelected) Ink else Line,
+                        color = if (isSelected) TextPrimary else BorderStrong,
                         shape = shape,
                         width = if (isSelected) 2.dp else 1.dp,
+                        dashed = !isSelected,
                     ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -155,12 +171,27 @@ private fun BarSlot(
                     text = "?",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isSelected) Ink else InkMuted,
+                    color = if (isSelected) TextPrimary else TextTertiary,
                 )
             }
             return@Column
         }
 
+        if (isSelected && pickMode) {
+            Text(
+                text = "선택",
+                style = MaterialTheme.typography.axis,
+                fontWeight = FontWeight.Bold,
+                color = BgSurface,
+                softWrap = false,
+                modifier = Modifier
+                    .padding(bottom = 3.dp)
+                    .wrapContentWidth(unbounded = true)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(BrandPrimary)
+                    .padding(horizontal = 3.dp),
+            )
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -169,13 +200,13 @@ private fun BarSlot(
                 .let { base ->
                     if (bar.estimated) {
                         // 보간으로 채운 시간 — 채우지 않고 점선으로
-                        base.outlineBorder(LineMid, shape, width = 1.5.dp, dashed = true)
+                        base.outlineBorder(LevelOutline, shape, width = 1.5.dp, dashed = true)
                     } else {
-                        base.background(level.fill ?: Paper, shape)
-                            .let { if (level.fill == null) it.outlineBorder(LineMid, shape) else it }
+                        base.background(level.fill ?: BgSurface, shape)
+                            .let { if (level.fill == null) it.outlineBorder(LevelOutline, shape) else it }
                     }
                 }
-                .let { if (isSelected) it.outlineBorder(Ink, shape, width = 2.dp) else it },
+                .let { if (isSelected) it.outlineBorder(if (pickMode) BrandPrimary else TextPrimary, shape, width = 2.dp) else it },
         )
     }
 }
@@ -207,15 +238,16 @@ private fun Tooltip(
             modifier = Modifier
                 .offset { IntOffset(x.roundToInt(), 0) }
                 .onSizeChanged { tipWidth = it.width }
-                .clip(RoundedCornerShape(6.dp))
-                .background(Ink)
-                .padding(horizontal = 8.dp, vertical = 5.dp),
+                .calmShadow(Shadows.tooltip, Radius.tooltip)
+                .clip(Radius.tooltip)
+                .background(TextPrimary)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
         ) {
             Text(
                 text = "${bar.hour}시 · ${bar.level?.label ?: "정보 없음"}",
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = Paper,
+                color = BgSurface,
             )
             Text(
                 text = when {
@@ -224,7 +256,7 @@ private fun Tooltip(
                     else -> "직접 측정한 시간이에요"
                 },
                 style = MaterialTheme.typography.labelSmall,
-                color = Paper,
+                color = BgSurface,
             )
         }
     }
@@ -255,17 +287,17 @@ private fun EvenHourAxis(bars: List<HourBar>, nowHour: Int, gap: Dp) {
             ) {
                 Text(
                     text = if (bar.hour % 2 == 0) bar.hour.toString() else "",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.axis,
                     fontWeight = if (isNow) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isNow) Ink else InkMuted,
+                    color = if (isNow) BrandPrimary else TextTertiary,
                     textAlign = TextAlign.Center,
                 )
                 if (isNow) {
                     Text(
                         text = "지금",
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.axis,
                         fontWeight = FontWeight.Bold,
-                        color = Ink,
+                        color = BrandPrimary,
                         softWrap = false,
                         // 칸(약 20dp)보다 글자가 넓다. 칸 밖으로 넘치더라도
                         // 잘리지 않고 가운데 정렬로 보이게 한다
@@ -273,6 +305,35 @@ private fun EvenHourAxis(bars: List<HourBar>, nowHour: Int, gap: Dp) {
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * 그래프 아래 범례 (최종안). 직접 측정 · 추정 · 정보 부족.
+ * 막대 모양만으로는 실측인지 추정인지 알 수 없어서 늘 같이 둔다.
+ */
+@Composable
+fun ChartLegend(modifier: Modifier = Modifier) {
+    val swatch = Modifier.size(12.dp)
+    val shape = RoundedCornerShape(3.dp)
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(swatch.clip(shape).background(LevelMid))
+            Text(text = "직접 측정", style = MaterialTheme.typography.caption, color = TextSecondary)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(swatch.outlineBorder(LevelOutline, shape, width = 1.5.dp, dashed = true))
+            Text(text = "추정", style = MaterialTheme.typography.caption, color = TextSecondary)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                swatch.background(BgSurface, shape).outlineBorder(BorderStrong, shape, dashed = true),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(text = "?", fontSize = 9.sp, color = TextTertiary)
+            }
+            Text(text = "정보 부족", style = MaterialTheme.typography.caption, color = TextSecondary)
         }
     }
 }

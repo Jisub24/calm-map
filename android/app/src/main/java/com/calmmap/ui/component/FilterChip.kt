@@ -1,11 +1,11 @@
 package com.calmmap.ui.component
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,22 +18,22 @@ import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.calmmap.ui.theme.Ink
-import com.calmmap.ui.theme.Line
-import com.calmmap.ui.theme.LineStrong
-import com.calmmap.ui.theme.Paper
+import com.calmmap.ui.theme.BgSurface
+import com.calmmap.ui.theme.BorderStrong
+import com.calmmap.ui.theme.Height
+import com.calmmap.ui.theme.Radius
+import com.calmmap.ui.theme.Shadows
+import com.calmmap.ui.theme.TextPrimary
+import com.calmmap.ui.theme.TextSecondary
 
 /**
- * 눌러서 켜고 끄는 칩.
+ * 피그마 최종안 Chip. 눌러서 켜고 끄는 알약 (높이 36).
  *
- * 쓰는 곳
- *   지도 홈    지금 · 시간 선택 · 우리 아이 맞춤
- *   검색       가까운 순 · 무던한 시간 있는 곳만
- *   장소 상세   점수 구성 · 소리 · 빛 · 무던한 시간
+ *   꺼짐  흰 바탕 + 회색 테두리 + 회색 글자
+ *   켜짐  진한 바탕 + 흰 글자 (굵게)
  *
- * 켜진 것과 꺼진 것을 바탕 진하기로 구분한다.
- * 읽어 주는 기능(TalkBack)을 쓰는 사람에게도 켜짐 여부가 전달되도록
- * toggleableState 를 같이 붙인다. 색만으로는 전달되지 않는다.
+ * 지도 위에 떠 있을 때는 floating = true 로 그림자를 넣는다. 지도 그림 위에서 칩이 묻히지 않게.
+ * 읽어 주는 기능에도 켜짐이 전달되게 toggleableState 를 붙인다. 색만으로는 전달되지 않는다.
  */
 @Composable
 fun FilterChip(
@@ -41,29 +41,29 @@ fun FilterChip(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    floating: Boolean = false,
+    trailingIcon: CalmIcons? = null,
 ) {
-    val shape = RoundedCornerShape(percent = 50)
-
-    Box(
+    val fg = if (selected) BgSurface else TextSecondary
+    Row(
         modifier = modifier
-            .height(32.dp)
+            .height(Height.chip)
+            .then(if (floating) Modifier.calmShadow(Shadows.card, Radius.pill) else Modifier)
             .pressFade(role = Role.Button, onClick = onClick)
-            .clip(shape)
-            .let { base ->
-                if (selected) base.background(LineStrong, shape)
-                else base.outlineBorder(color = Line, shape = shape)
-            }
-            .padding(horizontal = 12.dp)
-            .semantics {
-                toggleableState = if (selected) ToggleableState.On else ToggleableState.Off
-            },
-        contentAlignment = Alignment.Center,
+            .clip(Radius.pill)
+            .background(if (selected) TextPrimary else BgSurface)
+            .then(if (selected || floating) Modifier else Modifier.border(1.dp, BorderStrong, Radius.pill))
+            .padding(horizontal = 14.dp)
+            .semantics { toggleableState = if (selected) ToggleableState.On else ToggleableState.Off },
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-            color = if (selected) Paper else Ink,
+            color = fg,
         )
+        if (trailingIcon != null) CalmIcon(trailingIcon, size = 16.dp, tint = fg)
     }
 }

@@ -13,7 +13,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.semantics.Role
-import com.calmmap.ui.theme.PaperBox
+import com.calmmap.ui.theme.BgSubtle
 
 /**
  * 눌렀다는 것을 눈으로 보여주는 두 가지 방법.
@@ -71,7 +71,7 @@ fun Modifier.pressFade(
 fun Modifier.pressHighlight(
     shape: Shape,
     role: Role? = null,
-    color: Color = PaperBox,
+    color: Color = BgSubtle,
     onClick: () -> Unit,
 ): Modifier {
     val interaction = remember { MutableInteractionSource() }
