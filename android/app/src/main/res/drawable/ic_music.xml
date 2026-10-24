@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 최종안 Icon/music · 24dp · 선 1.8. 색은 Compose 에서 tint 로 바꾼다 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M9.33333 17.9999C9.33333 18.7072 9.05238 19.3854 8.55229 19.8855C8.05219 20.3856 7.37391 20.6666 6.66667 20.6666C5.95942 20.6666 5.28115 20.3856 4.78105 19.8855C4.28095 19.3854 4 18.7072 4 17.9999C4 17.2927 4.28095 16.6144 4.78105 16.1143C5.28115 15.6142 5.95942 15.3333 6.66667 15.3333C7.37391 15.3333 8.05219 15.6142 8.55229 16.1143C9.05238 16.6144 9.33333 17.2927 9.33333 17.9999ZM20 15.9999C20 16.7072 19.719 17.3854 19.219 17.8855C18.7189 18.3856 18.0406 18.6666 17.3333 18.6666C16.6261 18.6666 15.9478 18.3856 15.4477 17.8855C14.9476 17.3854 14.6667 16.7072 14.6667 15.9999C14.6667 15.2927 14.9476 14.6144 15.4477 14.1143C15.9478 13.6142 16.6261 13.3333 17.3333 13.3333C18.0406 13.3333 18.7189 13.6142 19.219 14.1143C19.719 14.6144 20 15.2927 20 15.9999Z"
+        android:strokeColor="#FF1A1D24"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M9.33333 18V6L20 4V16"
+        android:strokeColor="#FF1A1D24"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
