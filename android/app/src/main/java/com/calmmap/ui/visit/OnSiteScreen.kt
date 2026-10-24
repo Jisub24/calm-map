@@ -28,13 +28,13 @@ import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.model.QuietSpot
 import com.calmmap.ui.model.sampleQuietSpots
 import com.calmmap.ui.theme.CalmMapTheme
-import com.calmmap.ui.theme.Ink
-import com.calmmap.ui.theme.InkMuted
-import com.calmmap.ui.theme.InkSoft
+import com.calmmap.ui.theme.TextPrimary
+import com.calmmap.ui.theme.TextTertiary
+import com.calmmap.ui.theme.TextSecondary
 import com.calmmap.ui.theme.LevelHigh
-import com.calmmap.ui.theme.LineSoft
-import com.calmmap.ui.theme.Paper
-import com.calmmap.ui.theme.PaperBox
+import com.calmmap.ui.theme.BorderDefault
+import com.calmmap.ui.theme.BgSurface
+import com.calmmap.ui.theme.BgSubtle
 
 // C4 현장 모드 (P2): 도착해서 지금 부하와 쉴 곳을 보여준다
 // TODO: 지금은 예시 값. 현장 측정(D)과 진동 알림을 붙이면 실제 값으로
@@ -50,7 +50,7 @@ fun OnSiteScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Paper)
+            .background(BgSurface)
             .safeDrawingPadding(),
     ) {
         TopBar(title = "${placeName}에 있어요")
@@ -68,7 +68,7 @@ fun OnSiteScreen(
                 text = "가까운 조용한 곳",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
-                color = InkSoft,
+                color = TextSecondary,
             )
             quietSpots.forEach { QuietSpotRow(it) }
         }
@@ -90,14 +90,14 @@ private fun LoadGauge(load: Int, note: String) {
             .fillMaxWidth()
             .height(200.dp)
             .clip(shape)
-            .background(PaperBox)
-            .border(1.dp, LineSoft, shape),
+            .background(BgSubtle)
+            .border(1.dp, BorderDefault, shape),
         verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(text = "지금 감각부하", style = MaterialTheme.typography.bodyMedium, color = InkMuted)
-        Text(text = "$load", fontSize = 56.sp, lineHeight = 64.sp, fontWeight = FontWeight.Bold, color = Ink)
-        Text(text = note, style = MaterialTheme.typography.bodyLarge, color = InkSoft)
+        Text(text = "지금 감각부하", style = MaterialTheme.typography.bodyMedium, color = TextTertiary)
+        Text(text = "$load", fontSize = 56.sp, lineHeight = 64.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text(text = note, style = MaterialTheme.typography.bodyLarge, color = TextSecondary)
     }
 }
 
@@ -112,8 +112,8 @@ private fun RisingAlert() {
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(text = "📳 부하가 빠르게 오르고 있어요", style = MaterialTheme.typography.titleSmall, color = Paper)
-        Text(text = "보호자 폰이 진동으로 알려요", style = MaterialTheme.typography.bodySmall, color = LineSoft)
+        Text(text = "📳 부하가 빠르게 오르고 있어요", style = MaterialTheme.typography.titleSmall, color = BgSurface)
+        Text(text = "보호자 폰이 진동으로 알려요", style = MaterialTheme.typography.bodySmall, color = BorderDefault)
     }
 }
 
@@ -124,13 +124,13 @@ private fun QuietSpotRow(spot: QuietSpot) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .border(1.dp, LineSoft, shape)
+            .border(1.dp, BorderDefault, shape)
             .padding(14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = spot.name, style = MaterialTheme.typography.bodyLarge, color = Ink)
-        Text(text = spot.distance, style = MaterialTheme.typography.bodySmall, color = InkMuted)
+        Text(text = spot.name, style = MaterialTheme.typography.bodyLarge, color = TextPrimary)
+        Text(text = spot.distance, style = MaterialTheme.typography.bodySmall, color = TextTertiary)
     }
 }
 

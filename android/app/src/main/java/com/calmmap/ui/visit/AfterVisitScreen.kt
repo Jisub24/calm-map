@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,28 +27,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.calmmap.ui.component.FeelingFace
+import com.calmmap.ui.component.CalmIcon
+import com.calmmap.ui.component.CalmIcons
 import com.calmmap.ui.component.FilterChip
-import com.calmmap.ui.component.outlineBorder
-import com.calmmap.ui.component.pressFade
+import com.calmmap.ui.component.GhostButton
 import com.calmmap.ui.component.PrimaryButton
+import com.calmmap.ui.component.pressFade
 import com.calmmap.ui.model.VisitFeeling
 import com.calmmap.ui.model.visitTriggers
+import com.calmmap.ui.theme.BgSubtle
+import com.calmmap.ui.theme.BgSurface
+import com.calmmap.ui.theme.BrandPrimary
+import com.calmmap.ui.theme.BrandPrimarySoft
 import com.calmmap.ui.theme.CalmMapTheme
-import com.calmmap.ui.theme.Ink
-import com.calmmap.ui.theme.InkMuted
-import com.calmmap.ui.theme.Line
-import com.calmmap.ui.theme.LineSoft
-import com.calmmap.ui.theme.LineStrong
-import com.calmmap.ui.theme.Paper
-import com.calmmap.ui.theme.PaperSoft
+import com.calmmap.ui.theme.Radius
+import com.calmmap.ui.theme.TextPrimary
+import com.calmmap.ui.theme.TextSecondary
+import com.calmmap.ui.theme.TextTertiary
+import com.calmmap.ui.theme.caption
 
-// C5 방문 후 기록: 괜찮았어요 / 힘들었어요 중 하나를 고르고 '기록하기'
-// 원인 칩은 '힘들었어요' 일 때만 같이 저장된다
+// 최종안 14 방문 후 기록: 괜찮았어요 / 힘들었어요 중 하나를 고르고 '기록하기'
+// '힘들었어요' 를 고르면 무엇이 힘들었는지 칩이 나온다 (선택)
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AfterVisitScreen(
@@ -63,65 +67,38 @@ fun AfterVisitScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Paper)
-            .safeDrawingPadding()
-            .padding(start = 20.dp, end = 20.dp, top = 40.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .background(BgSurface)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 12.dp),
     ) {
-        Text(
-            text = "$placeName 다녀왔어요",
-            fontSize = 22.sp,
-            lineHeight = 33.sp,
-            fontWeight = FontWeight.Bold,
-            color = Ink,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Text(
-            text = "$whenLabel 방문",
-            style = MaterialTheme.typography.bodyMedium,
-            color = InkMuted,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Spacer(modifier = Modifier.weight(1f))
+        Text(text = "$placeName\n다녀왔어요", style = MaterialTheme.typography.headlineSmall, color = TextPrimary)
+        Spacer(Modifier.height(6.dp))
+        Text(text = "$whenLabel 방문 · 아이는 어땠나요?", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+        Spacer(Modifier.height(20.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             FeelingCard(
-                emoji = "🙂",
+                good = true,
                 label = "괜찮았어요",
                 selected = feeling == VisitFeeling.OK,
                 onClick = { feeling = VisitFeeling.OK },
                 modifier = Modifier.weight(1f),
             )
             FeelingCard(
-                emoji = "😣",
+                good = false,
                 label = "힘들었어요",
                 selected = feeling == VisitFeeling.HARD,
                 onClick = { feeling = VisitFeeling.HARD },
                 modifier = Modifier.weight(1f),
             )
         }
-        Text(
-            text = "고르고 기록하면 다음 추천에 반영돼요.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = InkMuted,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
 
-        // 선택 입력이라 점선 상자
-        val shape = RoundedCornerShape(12.dp)
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .outlineBorder(LineSoft, shape, dashed = true)
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(text = "(선택) 무엇이 힘들었나요?", style = MaterialTheme.typography.bodySmall, color = InkMuted)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (feeling == VisitFeeling.HARD) {
+            Spacer(Modifier.height(24.dp))
+            Text(text = "무엇이 힘들었나요? (선택)", style = MaterialTheme.typography.labelLarge, color = TextPrimary)
+            Spacer(Modifier.height(10.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 visitTriggers.forEach { trigger ->
                     FilterChip(
                         label = trigger,
@@ -130,10 +107,25 @@ fun AfterVisitScreen(
                     )
                 }
             }
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(Radius.banner)
+                    .background(BgSubtle)
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CalmIcon(CalmIcons.Info, size = 16.dp, tint = TextTertiary)
+                Text(
+                    text = "고른 요인은 '우리 아이 맞춤'에 조금씩 반영돼요. 한 번에 크게 바뀌지 않아요.",
+                    style = MaterialTheme.typography.caption,
+                    color = TextSecondary,
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
-
+        Spacer(Modifier.weight(1f))
         PrimaryButton(
             text = "기록하기",
             enabled = feeling != null,
@@ -142,42 +134,26 @@ fun AfterVisitScreen(
                 onSubmit(chosen, if (chosen == VisitFeeling.HARD) picked.toList() else emptyList())
             },
         )
-        Text(
-            text = "건너뛰기",
-            style = MaterialTheme.typography.bodyMedium,
-            color = InkMuted,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .pressFade(role = Role.Button, onClick = onSkip)
-                .padding(vertical = 12.dp),
-        )
+        Spacer(Modifier.height(4.dp))
+        GhostButton(text = "건너뛰기", onClick = onSkip)
     }
 }
 
-// 크게 누르는 반응 카드
+// 반응 카드. 고른 카드는 연한 파랑 + 파란 테두리
 @Composable
-private fun FeelingCard(
-    emoji: String,
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val shape = RoundedCornerShape(16.dp)
+private fun FeelingCard(good: Boolean, label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .pressFade(role = Role.RadioButton, onClick = onClick)
-            .clip(shape)
-            .background(PaperSoft)
-            // 고른 카드는 테두리를 굵고 진하게
-            .border(if (selected) 2.dp else 1.dp, if (selected) LineStrong else Line, shape)
-            .padding(vertical = 40.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .clip(Radius.card)
+            .background(if (selected) BrandPrimarySoft else BgSubtle)
+            .then(if (selected) Modifier.border(1.5.dp, BrandPrimary, Radius.card) else Modifier)
+            .padding(vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(text = emoji, fontSize = 36.sp)
-        Text(text = label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ink)
+        FeelingFace(good = good, color = if (selected) BrandPrimary else TextPrimary)
+        Text(text = label, style = MaterialTheme.typography.titleSmall, color = if (selected) BrandPrimary else TextPrimary)
     }
 }
 

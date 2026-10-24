@@ -1,5 +1,7 @@
 package com.calmmap.ui.model
 
+import com.calmmap.ui.component.CalmIcons
+
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.TextStyle
@@ -44,17 +46,18 @@ data class VisitPlan(
 /**
  * 미리 보는 카드의 한 단계.
  *
- * @param text      카드 목록에 쓰는 한 줄. "계산대는 오른쪽에 있어요"
+ * @param text      카드 목록에 쓰는 한 줄. "문을 밀고 들어가요"
  * @param childText 아이와 보기에서 크게 보여줄 글. 줄을 나눠 짧게 끊는다
+ * @param icon      단계 그림 (아이와 보기에서는 크게)
  */
-data class CardStep(val text: String, val childText: String)
+data class CardStep(val text: String, val childText: String, val icon: CalmIcons)
 
-// TODO: AI 카드 생성을 붙이면 장소마다 만들어 받는다
+// TODO: AI 카드 생성을 붙이면 장소마다 만들어 받는다. 예측이라 '~할 수 있어요' 로 쓴다
 val sampleCardSteps = listOf(
-    CardStep("문을 밀고 들어가요", "문을 밀고\n들어가요"),
-    CardStep("계산대는 오른쪽에 있어요", "계산대는\n오른쪽에 있어요"),
-    CardStep("방송 소리가 나면 헤드폰을 써요", "방송 소리가 나면\n헤드폰을 써요"),
-    CardStep("힘들면 2층 수유실에서 쉬어요", "힘들면\n2층 수유실에서 쉬어요"),
+    CardStep("문을 밀고 들어가요", "문을 밀고\n들어가요", CalmIcons.Store),
+    CardStep("안내방송이 나올 수 있어요", "안내방송이\n나올 수 있어요", CalmIcons.Volume),
+    CardStep("소리가 크면 헤드폰을 써요", "소리가 크면\n헤드폰을 써요", CalmIcons.Headphones),
+    CardStep("힘들면 1층 쉼터에서 쉬어요", "힘들면\n1층 쉼터에서 쉬어요", CalmIcons.Pin),
 )
 
 /** 현장 모드에 보여줄 가까운 조용한 곳 */
@@ -67,4 +70,4 @@ val sampleQuietSpots = listOf(
 )
 
 /** 방문 후 기록에서 고르는 '무엇이 힘들었나요' */
-val visitTriggers = listOf("안내방송", "사람 많음", "기다림")
+val visitTriggers = listOf("갑작스러운 소리", "사람 많음", "밝은 조명", "기다림", "잘 모르겠어요")
