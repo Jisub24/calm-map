@@ -4,12 +4,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,34 +25,42 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.calmmap.ui.component.BackIcon
+import com.calmmap.ui.component.ButtonSize
+import com.calmmap.ui.component.CalmIcon
+import com.calmmap.ui.component.CalmIcons
+import com.calmmap.ui.component.InfoButton
 import com.calmmap.ui.component.LevelBadge
 import com.calmmap.ui.component.PrimaryButton
 import com.calmmap.ui.component.SecondaryButton
+import com.calmmap.ui.component.TooltipBubble
+import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.component.outlineBorder
-import com.calmmap.ui.component.pressHighlight
 import com.calmmap.ui.model.NoDataUi
 import com.calmmap.ui.model.PlaceUi
-import com.calmmap.ui.theme.Ink
-import com.calmmap.ui.theme.InkMuted
-import com.calmmap.ui.theme.InkSoft
-import com.calmmap.ui.theme.LineFaint
-import com.calmmap.ui.theme.LineSoft
-import com.calmmap.ui.theme.Paper
-import com.calmmap.ui.theme.PaperBox
-import com.calmmap.ui.theme.PaperSoft
-import com.calmmap.ui.theme.SensoryLevel
+import com.calmmap.ui.theme.BgCanvas
+import com.calmmap.ui.theme.BgSubtle
+import com.calmmap.ui.theme.BgSunken
+import com.calmmap.ui.theme.BgSurface
+import com.calmmap.ui.theme.BrandPrimaryPressed
+import com.calmmap.ui.theme.BrandPrimarySoft
+import com.calmmap.ui.theme.LevelNoData
+import com.calmmap.ui.theme.Radius
+import com.calmmap.ui.theme.TextPrimary
+import com.calmmap.ui.theme.TextSecondary
+import com.calmmap.ui.theme.TextTertiary
+import com.calmmap.ui.theme.caption
+
+/** 서울시 지역 혼잡도 4단계 */
+private val congestionSteps = listOf("여유", "보통", "약간 붐빔", "붐빔")
 
 /**
- * 와이어프레임 B5. 소리 · 빛 측정이 없는 장소의 상세.
+ * 최종안 10 정보 부족 장소 · ⓘ 눌렀을 때.
  *
- * B4 와 가장 다른 점은 **종합 점수를 보여주지 않는다**는 것이다.
- * 혼잡 정보는 있지만 그것만으로 점수를 내면 부담을 낮게 잘못 안내하게 된다.
- * 모르면 모른다고 말하고, 대신 측정을 요청할 길을 준다.
+ * 종합 점수를 내지 않는다. 소리 · 빛이 비면 실제 최댓값을 알 수 없어서,
+ * 혼잡만으로 점수를 내면 부담을 낮게 잘못 안내하게 된다.
+ * 대신 ① 주변 지역 혼잡 ② 보호자 후기 ③ 측정 요청 · 직접 측정 을 보여준다.
  */
 @Composable
 fun NoDataScreen(
@@ -66,203 +75,168 @@ fun NoDataScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Paper)
-            .safeDrawingPadding(),
+            .background(BgCanvas)
+            .navigationBarsPadding(),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .pressHighlight(
-                        shape = RoundedCornerShape(percent = 50),
-                        role = Role.Button,
-                        onClick = onBack,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                BackIcon(size = 22.dp, color = Ink)
-            }
-            Text(
-                text = place.name,
-                style = MaterialTheme.typography.titleMedium,
-                color = Ink,
-                modifier = Modifier.padding(start = 2.dp),
-            )
-        }
+        TopBar(title = place.name, onBack = onBack, background = BgCanvas)
 
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = "${place.category} · 도보 ${place.walkMinutes}분 · ${if (place.openNow) "영업 중" else "영업 종료"}",
-                style = MaterialTheme.typography.bodySmall,
-                color = InkMuted,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "${place.category} · 도보 ${place.walkMinutes}분 · ${if (place.openNow) "영업 중" else "영업 종료"}",
+                    style = MaterialTheme.typography.caption,
+                    color = TextTertiary,
+                    modifier = Modifier.weight(1f),
+                )
+                LevelBadge(level = place.level)
+            }
 
-            NoScoreBox()
+            // 모르는 것은 모른다고: 점선 테두리 카드
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(Radius.card)
+                    .background(BgSurface)
+                    .outlineBorder(LevelNoData, Radius.card, dashed = true)
+                    .padding(horizontal = 19.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(text = "이 장소의 소리·빛 정보가 아직 없어요", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
+                Text(
+                    text = "모르는 것을 '무던함'으로 추측하지 않아요. 종합 점수는 측정이 쌓이면 보여드려요.",
+                    style = MaterialTheme.typography.caption,
+                    color = TextSecondary,
+                )
+            }
+
             AreaCongestionCard(info)
-            ReviewCard(info)
-        }
 
-        // 측정 요청은 화면 아래에 고정한다. 스크롤해서 찾게 하면
-        // 정보가 없는 곳에서 할 수 있는 유일한 일을 못 보고 나가게 된다
-        Column(
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "요청이 많은 곳부터 측정해요 · 지금 ${info.requestCount}명 요청함",
-                style = MaterialTheme.typography.bodySmall,
-                color = InkSoft,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            PrimaryButton(
-                text = if (requested) "요청함" else "측정 요청하기",
-                onClick = { requested = true },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            SecondaryButton(
-                text = "내가 직접 측정하기",
-                onClick = onMeasureClick,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            WhiteCard {
+                Text(text = "보호자 후기 ${info.reviewTotal}건", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+                Text(text = "점수에는 넣지 않아요", style = MaterialTheme.typography.caption, color = TextTertiary)
+                Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ReviewPill("괜찮았어요", info.reviewGood, Modifier.weight(1f))
+                    ReviewPill("힘들었어요", info.reviewHard, Modifier.weight(1f))
+                }
+            }
+
+            // 측정 요청 카드 (연한 파랑)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(Radius.card)
+                    .background(BrandPrimarySoft)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CalmIcon(CalmIcons.Users, size = 20.dp, tint = BrandPrimaryPressed)
+                    Text(
+                        text = "지금 ${info.requestCount + if (requested) 1 else 0}명이 측정을 요청했어요",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = BrandPrimaryPressed,
+                    )
+                }
+                Text(
+                    text = "요청이 많은 곳부터 측정해요. 원음은 저장하지도 보내지도 않아요.",
+                    style = MaterialTheme.typography.caption,
+                    color = TextSecondary,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SecondaryButton(text = "직접 측정하기", onClick = onMeasureClick, size = ButtonSize.M, modifier = Modifier.weight(1f))
+                    // TODO: measurement_requests 에 저장
+                    PrimaryButton(
+                        text = if (requested) "요청했어요" else "측정 요청하기",
+                        onClick = { requested = true },
+                        enabled = !requested,
+                        size = ButtonSize.M,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
         }
     }
 }
 
-/**
- * 종합 점수 자리에 들어가는 상자.
- *
- * 여기에 숫자나 단계 색을 넣지 않는다. 색을 붙이면 그 자체가 판정으로 읽힌다.
- */
 @Composable
-private fun NoScoreBox() {
+private fun WhiteCard(content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(PaperBox)
+            .clip(Radius.card)
+            .background(BgSurface)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        LevelBadge(level = SensoryLevel.NO_DATA)
-        Text(
-            text = "이 장소의 소리 · 빛 정보가 아직 없어요",
-            style = MaterialTheme.typography.titleSmall,
-            color = Ink,
-        )
-    }
+        content = content,
+    )
 }
 
-/**
- * 주변 지역 혼잡.
- *
- * '주변 지역' 이라고 분명히 쓰는 것이 중요하다.
- * 서울시 값은 통신 기지국으로 추정한 **지역 인구**라서 매장 안과 다를 수 있다.
- * 홍대에서 지역 전체가 '보통' 인데 한식은 '분주한', 마트는 '한산한' 인 것을
- * 실제로 확인했다.
- */
+/** 주변 지역 혼잡: 4칸 막대 + 지금 · 다음 변화. ⓘ 를 누르면 말풍선으로 출처를 알린다 */
 @Composable
 private fun AreaCongestionCard(info: NoDataUi) {
-    val shape = RoundedCornerShape(10.dp)
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .outlineBorder(LineSoft, shape)
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = "주변 지역 혼잡",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                color = Ink,
-            )
-            Text(
-                text = "지금 ${info.nowCongestion}",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                color = Ink,
+    var showInfo by remember { mutableStateOf(false) }
+    val nowStep = congestionSteps.indexOf(info.nowCongestion).coerceAtLeast(0)
+    // 지금과 달라지는 첫 시간
+    val next = info.forecast.firstOrNull { it.label != info.nowCongestion }
+
+    WhiteCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "주변 지역 혼잡", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+                Text(text = "${info.areaName} · 서울시 예측", style = MaterialTheme.typography.caption, color = TextTertiary)
+            }
+            InfoButton(onClick = { showInfo = !showInfo })
+        }
+        if (showInfo) {
+            TooltipBubble(
+                title = "서울시가 측정한 지역 혼잡도 예측이에요.",
+                body = "매장 안 혼잡도와 다를 수 있어요.",
+                modifier = Modifier.align(Alignment.End),
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            info.forecast.forEach { hour ->
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(LineFaint)
-                        .padding(vertical = 6.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        text = "${hour.hour}시",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = InkSoft,
+        Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            congestionSteps.forEachIndexed { i, step ->
+                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (i <= nowStep) TextSecondary else BgSunken),
                     )
                     Text(
-                        text = hour.label,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Ink,
+                        text = step,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (i == nowStep) TextPrimary else TextTertiary,
                         textAlign = TextAlign.Center,
                     )
                 }
             }
         }
         Text(
-            text = "서울시 실시간 도시데이터 4단계(여유 · 보통 · 약간 붐빔 · 붐빔). " +
-                "통신 신호로 추정한 ${info.areaName} 지역 인구라 매장 안 혼잡과 다를 수 있어요.",
-            style = MaterialTheme.typography.labelMedium,
-            color = InkMuted,
+            text = "지금 ${info.nowCongestion}" + (next?.let { " · ${it.hour}시부터 ${it.label}" } ?: ""),
+            style = MaterialTheme.typography.labelLarge,
+            color = TextPrimary,
+            modifier = Modifier.padding(top = 14.dp),
         )
     }
 }
 
-/**
- * 보호자 후기. 개수만 보여주고 점수로 환산하지 않는다.
- *
- * 후기는 몇 명이 어떤 날 어떤 상태로 갔는지에 따라 흔들려서,
- * 숫자로 바꾸면 측정값과 같은 무게로 읽히게 된다.
- */
 @Composable
-private fun ReviewCard(info: NoDataUi) {
+private fun ReviewPill(label: String, count: Int, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(PaperSoft)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier = modifier
+            .clip(Radius.pill)
+            .background(BgSubtle)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            text = "보호자 후기 ${info.reviewTotal}건",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            color = Ink,
-        )
-        Text(
-            text = "괜찮았어요 ${info.reviewGood} · 힘들었어요 ${info.reviewHard}",
-            style = MaterialTheme.typography.bodySmall,
-            color = InkSoft,
-        )
+        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = TextSecondary, modifier = Modifier.weight(1f))
+        Text(text = "$count", style = MaterialTheme.typography.labelLarge, color = TextPrimary)
     }
 }

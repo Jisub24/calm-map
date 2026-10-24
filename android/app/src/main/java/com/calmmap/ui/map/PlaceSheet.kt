@@ -1,5 +1,17 @@
 package com.calmmap.ui.map
 
+import androidx.compose.ui.text.style.TextOverflow
+import com.calmmap.ui.component.ButtonSize
+import com.calmmap.ui.component.CalmIcon
+import com.calmmap.ui.component.CalmIcons
+import com.calmmap.ui.component.ChartLegend
+import com.calmmap.ui.component.calmShadow
+import com.calmmap.ui.theme.BgSubtle
+import com.calmmap.ui.theme.BrandPrimaryPressed
+import com.calmmap.ui.theme.BrandPrimarySoft
+import com.calmmap.ui.theme.Radius
+import com.calmmap.ui.theme.Shadows
+import com.calmmap.ui.theme.caption
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -30,13 +42,12 @@ import com.calmmap.ui.component.PrimaryButton
 import com.calmmap.ui.component.SecondaryButton
 import com.calmmap.ui.component.outlineBorder
 import com.calmmap.ui.model.PlaceUi
-import com.calmmap.ui.theme.Ink
-import com.calmmap.ui.theme.InkMuted
-import com.calmmap.ui.theme.InkSoft
-import com.calmmap.ui.theme.Line
-import com.calmmap.ui.theme.LineStrong
-import com.calmmap.ui.theme.Paper
-import com.calmmap.ui.theme.PaperBox
+import com.calmmap.ui.theme.TextPrimary
+import com.calmmap.ui.theme.TextTertiary
+import com.calmmap.ui.theme.TextSecondary
+import com.calmmap.ui.theme.BorderStrong
+import com.calmmap.ui.theme.BgSurface
+import com.calmmap.ui.theme.BgSubtle
 
 /**
  * 와이어프레임 B2. 지도에서 장소를 누르면 아래에서 올라오는 카드.
@@ -59,8 +70,9 @@ fun PlaceSheet(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-            .background(Paper)
+            .calmShadow(Shadows.sheet, Radius.sheet)
+            .clip(Radius.sheet)
+            .background(BgSurface)
             // 카드의 빈 곳을 누르면 말풍선을 닫는다.
             // 말풍선을 닫는 방법이 같은 막대를 또 누르는 것뿐이면,
             // 어느 막대를 눌렀는지 잊었을 때 닫을 길이 없다
@@ -68,31 +80,24 @@ fun PlaceSheet(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
             ) { selectedHour = null }
-            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp),
+            .padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 12.dp),
     ) {
-        // 끌어올릴 수 있다는 표시. 아직 끄는 동작은 없고 모양만 둔다
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .width(32.dp)
-                .height(4.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(Line),
-        )
+        SheetHandle(Modifier.align(Alignment.CenterHorizontally))
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp),
+                .padding(top = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
                 text = place.name,
-                style = MaterialTheme.typography.titleLarge,
-                color = Ink,
+                style = MaterialTheme.typography.headlineSmall,
+                color = TextPrimary,
+                modifier = Modifier.weight(1f, fill = false),
             )
-            LevelBadge(level = place.level, prefix = "지금")
+            LevelBadge(level = place.level)
         }
 
         Text(
@@ -101,9 +106,9 @@ fun PlaceSheet(
                 append(" · 도보 ${place.walkMinutes}분")
                 append(if (place.openNow) " · 영업 중" else " · 영업 종료")
             },
-            style = MaterialTheme.typography.bodySmall,
-            color = InkMuted,
-            modifier = Modifier.padding(top = 4.dp),
+            style = MaterialTheme.typography.caption,
+            color = TextTertiary,
+            modifier = Modifier.padding(top = 2.dp),
         )
 
         RecommendationBox(
@@ -120,52 +125,30 @@ fun PlaceSheet(
                 selectedHour = selectedHour,
                 // 같은 막대를 다시 누르면 말풍선을 닫는다
                 onBarClick = { selectedHour = if (selectedHour == it.hour) null else it.hour },
-                modifier = Modifier.padding(top = 12.dp),
+                modifier = Modifier.padding(top = 14.dp),
             )
-            MissingHoursNote(
-                place = place,
-                modifier = Modifier.padding(top = 6.dp),
-            )
+            ChartLegend(modifier = Modifier.padding(top = 8.dp))
         }
 
         place.businessNote?.let { note ->
-            Row(
-                modifier = Modifier.padding(top = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                BusinessBadge()
-                Text(
-                    text = note,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = InkSoft,
-                )
-            }
+            BusinessNote(note = note, modifier = Modifier.padding(top = 10.dp))
         }
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 14.dp),
+                .padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            SecondaryButton(
-                text = "상세 보기",
-                onClick = onDetailClick,
-                modifier = Modifier.weight(1f),
-            )
-            PrimaryButton(
-                text = "방문 계획",
-                onClick = onVisitClick,
-                modifier = Modifier.weight(1f),
-            )
+            SecondaryButton(text = "상세 보기", onClick = onDetailClick, size = ButtonSize.M, modifier = Modifier.weight(1f))
+            PrimaryButton(text = "방문 계획", onClick = onVisitClick, size = ButtonSize.M, modifier = Modifier.weight(1f))
         }
     }
 }
 
-/** 카드에서 가장 크게 보이는 자리. 점수가 아니라 시간대를 말한다 */
+/** 카드에서 가장 크게 보이는 자리. 점수가 아니라 시간대를 말한다 (연한 파랑 상자) */
 @Composable
-private fun RecommendationBox(
+internal fun RecommendationBox(
     recommendation: String,
     basis: String,
     modifier: Modifier = Modifier,
@@ -173,67 +156,36 @@ private fun RecommendationBox(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(PaperBox)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .clip(Radius.card)
+            .background(BrandPrimarySoft)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Text(
-            text = recommendation,
-            style = MaterialTheme.typography.titleSmall,
-            color = Ink,
-        )
-        Text(
-            text = basis,
-            style = MaterialTheme.typography.labelMedium,
-            color = InkSoft,
-        )
+        Text(text = recommendation, style = MaterialTheme.typography.titleMedium, color = BrandPrimaryPressed)
+        Text(text = basis, style = MaterialTheme.typography.caption, color = TextSecondary)
     }
 }
 
-/**
- * 그래프에서 비어 있는 시간을 글자로 알려준다.
- *
- * 빈칸만 두면 "조용한 시간" 으로 잘못 읽힌다.
- * 모르는 것은 모른다고 말해야 한다.
- */
+/** 사업장이 직접 등록한 시간. AI 예측과 구분해서 가게 아이콘과 '사업장 등록' 을 앞에 붙인다 */
 @Composable
-private fun MissingHoursNote(place: PlaceUi, modifier: Modifier = Modifier) {
-    val missing = place.hours.filter { it.level == null }
-    if (missing.isEmpty()) return
-
-    // 비어 있는 시간이 끝에 몰려 있으면 하나씩 적지 않고 'N시 이후' 로 줄인다.
-    // 영업이 끝난 뒤라 비는 경우가 많은데, 다 적으면 한 줄이 넘어간다
-    val tail = place.hours.takeLastWhile { it.level == null }
-    val text = if (tail.size == missing.size && missing.size > 2) {
-        "${tail.first().hour}시 이후는 아직 정보가 없어요"
-    } else {
-        "${missing.joinToString(" · ") { "${it.hour}시" }}는 아직 정보가 없어요"
-    }
-
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelSmall,
-        color = InkMuted,
-        modifier = modifier,
-    )
-}
-
-/** 사업장이 직접 등록한 시간이라는 표시. AI 예측과 구분해야 한다 */
-@Composable
-private fun BusinessBadge(modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(4.dp)
-    Box(
+internal fun BusinessNote(note: String, modifier: Modifier = Modifier) {
+    Row(
         modifier = modifier
-            .clip(shape)
-            .outlineBorder(LineStrong, shape)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+            .fillMaxWidth()
+            .height(36.dp)
+            .clip(Radius.pill)
+            .background(BgSubtle)
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        CalmIcon(CalmIcons.Store, size = 18.dp, tint = TextSecondary)
         Text(
-            text = "사업장 등록",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Medium,
-            color = Ink,
+            text = "사업장 등록 · $note",
+            style = MaterialTheme.typography.caption,
+            color = TextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
