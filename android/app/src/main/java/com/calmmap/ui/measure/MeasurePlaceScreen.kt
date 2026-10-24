@@ -31,13 +31,12 @@ import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.sampleMeasureCount
 import com.calmmap.ui.model.samplePlaces
 import com.calmmap.ui.theme.CalmMapTheme
-import com.calmmap.ui.theme.Ink
-import com.calmmap.ui.theme.InkMuted
-import com.calmmap.ui.theme.InkSoft
-import com.calmmap.ui.theme.LineFaint
-import com.calmmap.ui.theme.LineSoft
-import com.calmmap.ui.theme.Paper
-import com.calmmap.ui.theme.PaperSoft
+import com.calmmap.ui.theme.TextPrimary
+import com.calmmap.ui.theme.TextTertiary
+import com.calmmap.ui.theme.TextSecondary
+import com.calmmap.ui.theme.BorderDefault
+import com.calmmap.ui.theme.BgSurface
+import com.calmmap.ui.theme.BgSubtle
 
 // D1 측정할 장소 선택: 지금 위치 근처 장소 중 하나를 고른다
 // TODO: 지금은 예시 장소를 가까운 순으로. 내 위치를 붙이면 실제 거리로
@@ -52,7 +51,7 @@ fun MeasurePlaceScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Paper)
+            .background(BgSurface)
             .safeDrawingPadding(),
     ) {
         TopBar(title = "어디서 측정할까요?", onBack = onBack)
@@ -63,14 +62,14 @@ fun MeasurePlaceScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(start = 20.dp, end = 20.dp, top = 4.dp),
         ) {
-            Text(text = "지금 위치 근처", style = MaterialTheme.typography.bodySmall, color = InkMuted)
+            Text(text = "지금 위치 근처", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
             places.sortedBy { it.walkMinutes }.forEach { place ->
                 PlaceRow(place = place, onClick = { onPlaceClick(place) })
             }
             Text(
                 text = "＋ 목록에 없는 장소 검색",
                 style = MaterialTheme.typography.bodyLarge,
-                color = InkSoft,
+                color = TextSecondary,
                 modifier = Modifier
                     .fillMaxWidth()
                     .pressFade(role = Role.Button, onClick = onSearchClick)
@@ -81,13 +80,13 @@ fun MeasurePlaceScreen(
         Text(
             text = "1분 동안 폰을 들고 있으면 돼요. 원음은 저장하지 않아요.",
             style = MaterialTheme.typography.bodySmall,
-            color = InkSoft,
+            color = TextSecondary,
             modifier = Modifier
                 .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(PaperSoft)
-                .border(1.dp, LineSoft, RoundedCornerShape(12.dp))
+                .background(BgSubtle)
+                .border(1.dp, BorderDefault, RoundedCornerShape(12.dp))
                 .padding(14.dp),
         )
     }
@@ -104,15 +103,15 @@ private fun PlaceRow(place: PlaceUi, onClick: () -> Unit) {
             .fillMaxWidth()
             .height(48.dp)
             .pressFade(role = Role.Button, onClick = onClick)
-            .bottomLine(LineFaint),
+            .bottomLine(BorderDefault),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(text = place.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Ink)
+        Text(text = place.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = TextPrimary)
         Text(
             text = "${distance}m · 측정 ${count}회$note",
             style = MaterialTheme.typography.bodyMedium,
-            color = InkMuted,
+            color = TextTertiary,
         )
     }
 }

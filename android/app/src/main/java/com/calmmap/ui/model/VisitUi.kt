@@ -2,8 +2,8 @@ package com.calmmap.ui.model
 
 /** 다녀온 뒤 아이 반응 */
 enum class VisitFeeling(val label: String) {
-    OK("🙂 괜찮았어요"),
-    HARD("😣 힘들었어요"),
+    OK("괜찮았어요"),
+    HARD("힘들었어요"),
 }
 
 /** 방문 기록 한 줄 */
