@@ -59,13 +59,18 @@ class MainActivity : ComponentActivity() {
                 // TODO: 화면이 더 늘어나면 화면 이동(Navigation)으로 바꾼다
                 // 지금 보여줄 단계. 바뀌면 아래 화면이 다시 그려진다
                 var step by remember { mutableStateOf(StartStep.Splash) }
+                // 로그인 없이 둘러보기로 들어왔는지. 그러면 우리 아이 설정을 건너뛰고 지도로 간다
+                var browsing by remember { mutableStateOf(false) }
                 val scope = rememberCoroutineScope()
                 // 로그인 상태. 브라우저에서 돌아와 로그인이 끝나면 Authenticated 로 바뀐다
                 val sessionStatus by supabase.auth.sessionStatus.collectAsStateWithLifecycle()
 
                 // 로그인 화면에 있는데 로그인이 끝났으면 다음 단계로
                 LaunchedEffect(sessionStatus) {
+                    // 둘러보다가 로그인 안내 시트에서 로그인하면 둘러보기 상태를 끝낸다
+                    if (sessionStatus is SessionStatus.Authenticated) browsing = false
                     if (sessionStatus is SessionStatus.Authenticated && step == StartStep.Login) {
+                        browsing = false
                         step = StartStep.LocationPermission
                     }
                 }
@@ -103,19 +108,46 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             },
-                            // TODO: 게스트 로그인(signInAnonymously) 붙이기 전까지는 아무 동작 없음
-                            onGuestClick = {},
+                            // 최종안 흐름: 로그인 없이 둘러보기 → 위치 권한 → 지도 (보기 전용)
+                            // TODO: signInAnonymously 와 보기 전용 제한(로그인 안내 시트)은 따로 붙인다
+                            onGuestClick = {
+                                browsing = true
+                                step = StartStep.LocationPermission
+                            },
                         )
                         StartStep.LocationPermission -> LocationPermissionScreen(
-                            onDone = { step = StartStep.ChildProfile },
+                            onDone = { step = if (browsing) StartStep.Map else StartStep.ChildProfile },
                         )
                         StartStep.ChildProfile -> ChildProfileScreen(
                             // TODO: Supabase profiles 에 저장한 뒤 넘어가게 바꾼다
                             onStart = { _ -> step = StartStep.Map },
-                            onSkip = { step = StartStep.Map },
                             onBack = { step = StartStep.LocationPermission },
                         )
-                        StartStep.Map -> CalmMapApp()
+                        StartStep.Map -> CalmMapApp(
+                            isGuest = browsing,
+                            // 로그인 안내 시트의 카카오 버튼. 로그인이 끝나면 sessionStatus 가 바뀐다
+                            onLoginClick = {
+                                scope.launch {
+                                    try {
+                                        supabase.auth.signInWith(Kakao)
+                                    } catch (e: Exception) {
+                                        Log.e("CalmMap", "카카오 로그인 실패", e)
+                                    }
+                                }
+                            },
+                            // 계정 관리 > 로그아웃. 기록은 계정에 남는다
+                            onLogout = {
+                                scope.launch {
+                                    try {
+                                        supabase.auth.signOut()
+                                    } catch (e: Exception) {
+                                        Log.e("CalmMap", "로그아웃 실패", e)
+                                    }
+                                    browsing = false
+                                    step = StartStep.Login
+                                }
+                            },
+                        )
                     }
                 }
             }

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 시스템 스플래시 아이콘: 로고 핀. 흰 원 바탕은 테마(windowSplashScreenIconBackgroundColor)가 깐다 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="18"
+        android:translateY="18"
+        android:scaleX="0.9"
+        android:scaleY="0.9">
+        <path
+            android:pathData="M40 62.5C40 62.5 23.75 48.75 23.75 35C23.75 30.6902 25.462 26.557 28.5095 23.5095C31.557 20.462 35.6902 18.75 40 18.75C44.3098 18.75 48.443 20.462 51.4905 23.5095C54.5379 26.557 56.25 30.6902 56.25 35C56.25 48.75 40 62.5 40 62.5Z"
+            android:fillColor="#FF3A6EA5" />
+        <path
+            android:pathData="M31.875 35.625C34.375 33.125 37.25 33.125 40 35.625C42.75 38.125 45.625 38.125 48.125 35.625"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="2.4"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M31.875 29.375C34.375 26.875 37.25 26.875 40 29.375C42.75 31.875 45.625 31.875 48.125 29.375"
+            android:strokeColor="#8CFFFFFF"
+            android:strokeWidth="2.4"
+            android:strokeLineCap="round" />
+    </group>
+</vector>

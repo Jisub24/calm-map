@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 안드로이드 12 이상은 앱을 켤 때 시스템 스플래시를 먼저 띄운다.
+         기본은 앱 아이콘(초록 안드로이드)이라, 최종안 스플래시와 같은 파란 바탕 + 로고로 맞춘다 -->
+    <style name="Theme.CalmMap" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowSplashScreenBackground">@color/brand_primary</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <!-- 시스템이 아이콘을 원으로 잘라서, 원 바탕을 흰색으로 둔다 (최종안의 흰 로고 타일) -->
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/white</item>
+    </style>
+</resources>
