@@ -3,8 +3,8 @@ package com.calmmap.ui.model
 import com.calmmap.ui.theme.SensoryLevel
 import java.time.LocalDateTime
 
-/** 한 번 측정하는 시간 */
-const val MEASURE_SECONDS = 60
+/** 한 번 측정하는 시간. 최종안 3분 */
+const val MEASURE_SECONDS = 180
 
 /** 소리 종류 하나와 그 점수(0~1). YAMNet 이 내는 값 */
 data class SoundScore(val label: String, val score: Float)

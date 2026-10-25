@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 최종안 Icon/map · 24dp · 선 1.8. 색은 Compose 에서 tint 로 바꾼다 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M3 6.5L9 4L15 6.5L21 4V17L15 19.5L9 17L3 19.5V6.5Z"
+        android:strokeColor="#FF1A1D24"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M9 4V17M15 6.5V19.5"
+        android:strokeColor="#FF1A1D24"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

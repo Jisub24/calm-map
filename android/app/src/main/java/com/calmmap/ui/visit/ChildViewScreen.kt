@@ -9,9 +9,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,25 +24,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.calmmap.ui.component.CalmIcon
+import com.calmmap.ui.component.CalmIcons
 import com.calmmap.ui.component.PrimaryButton
 import com.calmmap.ui.component.SecondaryButton
+import com.calmmap.ui.component.calmShadow
+import com.calmmap.ui.component.pressFade
 import com.calmmap.ui.model.CardStep
 import com.calmmap.ui.model.sampleCardSteps
+import com.calmmap.ui.theme.BgSurface
+import com.calmmap.ui.theme.BrandPrimary
+import com.calmmap.ui.theme.BrandPrimarySoft
 import com.calmmap.ui.theme.CalmMapTheme
-import com.calmmap.ui.theme.Ink
-import com.calmmap.ui.theme.InkSoft
-import com.calmmap.ui.theme.LineFaint
-import com.calmmap.ui.theme.LineSoft
-import com.calmmap.ui.theme.LineStrong
-import com.calmmap.ui.theme.Paper
+import com.calmmap.ui.theme.Radius
+import com.calmmap.ui.theme.Shadows
+import com.calmmap.ui.theme.TextPrimary
+import com.calmmap.ui.theme.TextSecondary
 
-// C3 아이와 보기: 카드를 한 장씩 크게. 아이가 보기 쉽게 글자와 그림만 둔다
-// 처음에서 '이전', 끝에서 '다 봤어요' 를 누르면 onClose 로 카드 화면에 돌아간다
+// 최종안 13 아이와 보기: 카드를 한 장씩 크게. 아이가 보기 쉽게 큰 그림과 글자만 둔다
+// 처음에서 '이전', 끝에서 '다 봤어요', 위의 '닫기' 를 누르면 onClose 로 카드 화면에 돌아간다
 @Composable
 fun ChildViewScreen(
     onClose: () -> Unit,
@@ -55,36 +60,67 @@ fun ChildViewScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Paper)
-            .safeDrawingPadding()
-            .padding(horizontal = 20.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+            .background(BrandPrimarySoft)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Progress(count = steps.size, current = index)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                text = "닫기",
+                style = MaterialTheme.typography.labelLarge,
+                color = TextSecondary,
+                modifier = Modifier.pressFade(role = Role.Button, onClick = onClose).padding(vertical = 8.dp),
+            )
+            // 진행 막대: 본 장까지 파랗게
+            Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                repeat(steps.size) { i ->
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(if (i <= index) BrandPrimary else BgSurface),
+                    )
+                }
+            }
+            Text(text = "${index + 1}/${steps.size}", style = MaterialTheme.typography.labelLarge, color = TextSecondary)
+        }
 
-        // TODO: 단계별 큰 그림이 생기면 Image 로
-        PhotoPlaceholder(text = "큰 그림", height = 300.dp)
-
+        Spacer(Modifier.height(32.dp))
+        Box(
+            modifier = Modifier
+                .size(196.dp)
+                .calmShadow(Shadows.card, Radius.pill)
+                .clip(Radius.pill)
+                .background(BgSurface),
+            contentAlignment = Alignment.Center,
+        ) {
+            CalmIcon(step.icon, size = 88.dp, tint = BrandPrimary)
+        }
+        Spacer(Modifier.height(40.dp))
         Text(
             text = step.childText,
-            fontSize = 28.sp,
-            lineHeight = 42.sp,
-            fontWeight = FontWeight.Bold,
-            color = Ink,
+            style = MaterialTheme.typography.displayLarge,
+            color = TextPrimary,
             textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
         )
+        Spacer(Modifier.height(20.dp))
         // TODO: TextToSpeech 로 읽어주기
-        Text(
-            text = "🔊 읽어주기",
-            style = MaterialTheme.typography.bodyLarge,
-            color = InkSoft,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        Row(
+            modifier = Modifier
+                .clip(Radius.pill)
+                .background(BgSurface)
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CalmIcon(CalmIcons.Volume, size = 18.dp, tint = BrandPrimary)
+            Text(text = "읽어주기", style = MaterialTheme.typography.labelLarge, color = BrandPrimary)
+        }
 
-        Spacer(modifier = Modifier.weight(1f))
-
+        Spacer(Modifier.weight(1f))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SecondaryButton(
                 text = "이전",
@@ -97,32 +133,12 @@ fun ChildViewScreen(
                 modifier = Modifier.weight(1f),
             )
         }
-    }
-}
-
-// 위쪽 진행 막대. 본 장까지 진하게
-@Composable
-private fun Progress(count: Int, current: Int) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-    ) {
-        repeat(count) { i ->
-            Box(
-                modifier = Modifier
-                    .width(56.dp)
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(if (i <= current) LineStrong else LineSoft),
-            )
-        }
+        Spacer(Modifier.height(4.dp).fillMaxWidth())
     }
 }
 
 @Preview(showBackground = true, widthDp = 360, heightDp = 800)
 @Composable
 private fun ChildViewScreenPreview() {
-    CalmMapTheme {
-        ChildViewScreen(onClose = {})
-    }
+    CalmMapTheme { ChildViewScreen(onClose = {}) }
 }

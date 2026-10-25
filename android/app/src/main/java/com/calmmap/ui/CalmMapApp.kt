@@ -2,13 +2,15 @@ package com.calmmap.ui
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import com.calmmap.ui.component.LoginRequiredSheet
 import com.calmmap.ui.component.MainTab
 import com.calmmap.ui.detail.NoDataScreen
 import com.calmmap.ui.detail.PlaceDetailScreen
@@ -23,7 +25,13 @@ import com.calmmap.ui.model.VisitUi
 import com.calmmap.ui.model.sampleVisits
 import com.calmmap.ui.model.sampleDetailFor
 import com.calmmap.ui.model.sampleNoDataFor
+import com.calmmap.ui.mypage.AccountScreen
 import com.calmmap.ui.mypage.DataInfoScreen
+import com.calmmap.ui.mypage.ProfileEditScreen
+import com.calmmap.ui.mypage.sampleSensitivities
+import com.calmmap.ui.onboarding.ChildProfileScreen
+import com.calmmap.ui.onboarding.SensoryFactor
+import com.calmmap.ui.onboarding.Sensitivity
 import com.calmmap.ui.mypage.MyPageScreen
 import com.calmmap.ui.mypage.VisitHistoryScreen
 import com.calmmap.ui.search.SearchScreen
@@ -38,6 +46,8 @@ import java.time.LocalTime
 /** 지금 보여줄 화면 */
 private enum class Screen {
     MAP, SEARCH, DETAIL, HISTORY, ME, DATA_INFO,
+    // 내 정보 안: 프로필 수정 · 우리 아이 수정 · 계정 관리
+    PROFILE_EDIT, CHILD_EDIT, ACCOUNT,
     // 방문 계획 흐름
     //   계획할 때: 시간 선택 → 지도 (방문 예정 띠가 생김)
     //   갈 때: 방문 예정 띠 → 미리 보는 카드 → (아이와 보기) → 현장 모드 → 방문 후 기록
@@ -57,7 +67,13 @@ private enum class Screen {
  * 그때도 MainActivity 는 손대지 않고 이 파일만 고치면 된다.
  */
 @Composable
-fun CalmMapApp() {
+fun CalmMapApp(
+    /** 로그인 없이 둘러보는 중인지. 그러면 측정 · 방문 계획 · 우리 아이 맞춤 앞에서 로그인 안내 시트를 띄운다 */
+    isGuest: Boolean = false,
+    onLoginClick: () -> Unit = {},
+    onLogout: () -> Unit = {},
+) {
+    var loginSheet by remember { mutableStateOf(false) }
     var screen by remember { mutableStateOf(Screen.MAP) }
     // 상세로 들어갈 때 어느 장소인지 들고 간다
     var detailPlace by remember { mutableStateOf<PlaceUi?>(null) }
@@ -74,10 +90,19 @@ fun CalmMapApp() {
     var cardFrom by remember { mutableStateOf(Screen.MAP) }
     // 시간 선택에서 뒤로 가면 돌아갈 곳 (지도 카드 또는 장소 상세)
     var visitFrom by remember { mutableStateOf(Screen.MAP) }
+    // 예정된 방문 목록에서 뒤로 가면 돌아갈 곳 (지도 띠 또는 기록 탭)
+    var plansFrom by remember { mutableStateOf(Screen.MAP) }
     // TODO: visits 테이블에 저장하면 지금은 앱을 끄면 사라진다
     val visits = remember { mutableStateListOf<VisitUi>().apply { addAll(sampleVisits) } }
+    // TODO: Supabase user_profiles 에 저장하면 지금은 앱을 끄면 처음 값으로 돌아간다
+    var nickname by remember { mutableStateOf("OO 보호자") }
+    var sensitivities by remember { mutableStateOf<Map<SensoryFactor, Sensitivity>>(sampleSensitivities) }
 
     fun startVisit(place: PlaceUi) {
+        if (isGuest) {
+            loginSheet = true
+            return
+        }
         visitFrom = screen
         visitPlace = place
         screen = Screen.VISIT_TIME
@@ -111,6 +136,10 @@ fun CalmMapApp() {
 
     // 장소 상세에서는 장소가 정해져 있어서 바로 측정 중으로
     fun startMeasure(place: PlaceUi?) {
+        if (isGuest) {
+            loginSheet = true
+            return
+        }
         measureFrom = screen
         measurePlace = place
         screen = if (place == null) Screen.MEASURE_PLACE else Screen.MEASURE_RUN
@@ -134,7 +163,8 @@ fun CalmMapApp() {
     // 이게 없으면 앱이 그냥 꺼져서 사용자가 보다 말고 튕긴 것처럼 느낀다
     BackHandler(enabled = screen != Screen.MAP) {
         screen = when (screen) {
-            Screen.DATA_INFO -> Screen.ME
+            Screen.DATA_INFO, Screen.PROFILE_EDIT, Screen.CHILD_EDIT, Screen.ACCOUNT -> Screen.ME
+            Screen.VISIT_PLANS -> plansFrom
             Screen.VISIT_TIME -> visitFrom
             Screen.VISIT_CARD -> cardFrom
             // 측정 중에 뒤로 가면 측정을 버린다. 지도에서 시작했으면 장소 선택으로
@@ -145,186 +175,245 @@ fun CalmMapApp() {
         }
     }
 
-    when (screen) {
-        Screen.MAP -> MapScreen(
-            onSearchClick = { screen = Screen.SEARCH },
-            onPlaceClick = { openDetail(it) },
-            onTabSelect = { selectTab(it) },
-            visitPlan = visitPlans.firstOrNull(),
-            otherVisitCount = (visitPlans.size - 1).coerceAtLeast(0),
-            onVisitClick = { startVisit(it) },
-            onVisitPlanClick = { visitPlans.firstOrNull()?.let { openPlan(it, Screen.VISIT_CARD) } },
-            onVisitDoneClick = { visitPlans.firstOrNull()?.let { openPlan(it, Screen.VISIT_AFTER) } },
-            onOtherVisitsClick = { screen = Screen.VISIT_PLANS },
-            onMeasureClick = { startMeasure(null) },
-        )
+    // 화면 위에 로그인 안내 시트를 덮을 수 있게 Box 로 감싼다
+    Box {
+        when (screen) {
+            Screen.MAP -> MapScreen(
+                onSearchClick = { screen = Screen.SEARCH },
+                onPlaceClick = { openDetail(it) },
+                onTabSelect = { selectTab(it) },
+                visitPlan = visitPlans.firstOrNull(),
+                otherVisitCount = (visitPlans.size - 1).coerceAtLeast(0),
+                onVisitClick = { startVisit(it) },
+                onVisitPlanClick = { visitPlans.firstOrNull()?.let { openPlan(it, Screen.VISIT_CARD) } },
+                onVisitDoneClick = { visitPlans.firstOrNull()?.let { openPlan(it, Screen.VISIT_AFTER) } },
+                onOtherVisitsClick = {
+                    plansFrom = Screen.MAP
+                    screen = Screen.VISIT_PLANS
+                },
+                onMeasureClick = { startMeasure(null) },
+            )
 
-        Screen.SEARCH -> SearchScreen(
-            onBack = { screen = Screen.MAP },
-            onPlaceClick = { openDetail(it) },
-            onTabSelect = { selectTab(it) },
-        )
+            Screen.SEARCH -> SearchScreen(
+                onBack = { screen = Screen.MAP },
+                onPlaceClick = { openDetail(it) },
+            )
 
-        Screen.HISTORY -> VisitHistoryScreen(onTabSelect = { selectTab(it) }, visits = visits)
+            Screen.HISTORY -> VisitHistoryScreen(
+                onTabSelect = { selectTab(it) },
+                visits = visits,
+                plans = visitPlans,
+                onPlanClick = { openPlan(it, Screen.VISIT_CARD) },
+                onAllPlansClick = {
+                    plansFrom = Screen.HISTORY
+                    screen = Screen.VISIT_PLANS
+                },
+            )
 
-        Screen.VISIT_PLANS -> PlannedVisitsScreen(
-            plans = visitPlans,
-            onBack = { screen = Screen.MAP },
-            onPlanClick = { openPlan(it, Screen.VISIT_CARD) },
-        )
+            Screen.VISIT_PLANS -> PlannedVisitsScreen(
+                plans = visitPlans,
+                onBack = { screen = plansFrom },
+                onPlanClick = { openPlan(it, Screen.VISIT_CARD) },
+            )
 
-        Screen.ME -> MyPageScreen(
-            onTabSelect = { selectTab(it) },
-            onVisitHistoryClick = { screen = Screen.HISTORY },
-            onDataInfoClick = { screen = Screen.DATA_INFO },
-        )
+            Screen.ME -> MyPageScreen(
+                onTabSelect = { selectTab(it) },
+                onDataInfoClick = { screen = Screen.DATA_INFO },
+                isGuest = isGuest,
+                nickname = nickname,
+                sensitivities = sensitivities,
+                onLoginClick = onLoginClick,
+                onProfileEditClick = { screen = Screen.PROFILE_EDIT },
+                onChildEditClick = { screen = Screen.CHILD_EDIT },
+                onAccountClick = { screen = Screen.ACCOUNT },
+            )
 
-        // TODO: 삭제는 확인 창을 띄운 뒤 Supabase 데이터와 계정을 지운다
-        Screen.DATA_INFO -> DataInfoScreen(
-            onBack = { screen = Screen.ME },
-            onDeleteAllClick = {},
-        )
+            Screen.PROFILE_EDIT -> ProfileEditScreen(
+                nickname = nickname,
+                onBack = { screen = Screen.ME },
+                onSave = {
+                    nickname = it
+                    screen = Screen.ME
+                },
+            )
 
-        Screen.VISIT_TIME -> {
-            val place = visitPlace
-            if (place == null) {
-                screen = Screen.MAP
-            } else {
-                VisitTimeScreen(
-                    place = place,
-                    nowHour = nowHour,
-                    onBack = { screen = visitFrom },
-                    onConfirm = { day, hour ->
-                        addPlan(VisitPlan(place, day, hour))
-                        // 계획만 잡고 지도로. 갈 때 '방문 예정' 띠를 눌러 카드를 연다
-                        screen = Screen.MAP
-                    },
-                )
+            Screen.CHILD_EDIT -> ChildProfileScreen(
+                initial = sensitivities,
+                confirmText = "저장",
+                onBack = { screen = Screen.ME },
+                onStart = {
+                    sensitivities = it
+                    screen = Screen.ME
+                },
+            )
+
+            Screen.ACCOUNT -> AccountScreen(
+                onBack = { screen = Screen.ME },
+                onLogout = onLogout,
+                // TODO: 서버에서 계정과 데이터를 지우는 함수(Edge Function)가 생기면 붙인다
+                onWithdraw = {
+                    Toast.makeText(context, "회원 탈퇴는 아직 준비 중이에요", Toast.LENGTH_SHORT).show()
+                },
+                visitCount = visits.size,
+            )
+
+            // TODO: 삭제는 확인 창을 띄운 뒤 Supabase 데이터와 계정을 지운다
+            Screen.DATA_INFO -> DataInfoScreen(
+                onBack = { screen = Screen.ME },
+                onDeleteAllClick = {},
+            )
+
+            Screen.VISIT_TIME -> {
+                val place = visitPlace
+                if (place == null) {
+                    screen = Screen.MAP
+                } else {
+                    VisitTimeScreen(
+                        place = place,
+                        nowHour = nowHour,
+                        onBack = { screen = visitFrom },
+                        onConfirm = { day, hour ->
+                            addPlan(VisitPlan(place, day, hour))
+                            // 계획만 잡고 지도로. 갈 때 '방문 예정' 띠를 눌러 카드를 연다
+                            screen = Screen.MAP
+                        },
+                    )
+                }
+            }
+
+            Screen.VISIT_CARD -> VisitCardScreen(
+                subtitle = activePlan?.let { "${it.place.name} · ${it.whenLabel}" }.orEmpty(),
+                onBack = { screen = cardFrom },
+                onChildViewClick = { screen = Screen.VISIT_CHILD },
+                onDepartClick = { screen = Screen.VISIT_ONSITE },
+                // 그 계획만 빼고 들어온 곳으로. 목록이 비면 지도로
+                onCancelVisit = {
+                    activePlan?.let { visitPlans.remove(it) }
+                    activePlan = null
+                    screen = if (cardFrom == Screen.VISIT_PLANS && visitPlans.isEmpty()) Screen.MAP else cardFrom
+                },
+            )
+
+            Screen.VISIT_CHILD -> ChildViewScreen(onClose = { screen = Screen.VISIT_CARD })
+
+            Screen.VISIT_ONSITE -> OnSiteScreen(
+                placeName = activePlan?.place?.name.orEmpty(),
+                onEndClick = { screen = Screen.VISIT_AFTER },
+            )
+
+            Screen.VISIT_AFTER -> {
+                val plan = activePlan
+                if (plan == null) {
+                    screen = Screen.MAP
+                } else {
+                    AfterVisitScreen(
+                        placeName = plan.place.name,
+                        whenLabel = plan.whenLabel,
+                        // 기록 탭 맨 위에 새 기록을 넣는다
+                        // TODO: visits 테이블에 저장
+                        onSubmit = { feeling, triggers ->
+                            visits.add(
+                                0,
+                                VisitUi(
+                                    placeName = plan.place.name,
+                                    visitedAt = plan.recordLabel,
+                                    feeling = feeling,
+                                    trigger = triggers.joinToString(", ").ifEmpty { null },
+                                ),
+                            )
+                            finishPlan(plan)
+                        },
+                        onSkip = { finishPlan(plan) },
+                    )
+                }
+            }
+
+            Screen.MEASURE_PLACE -> MeasurePlaceScreen(
+                onBack = { screen = measureFrom },
+                onPlaceClick = {
+                    measurePlace = it
+                    screen = Screen.MEASURE_RUN
+                },
+            )
+
+            Screen.MEASURE_RUN -> {
+                val place = measurePlace
+                if (place == null) {
+                    screen = measureFrom
+                } else {
+                    MeasuringScreen(
+                        place = place,
+                        onBack = {
+                            screen = if (measureFrom == Screen.MAP) Screen.MEASURE_PLACE else measureFrom
+                        },
+                        onFinish = {
+                            measureResult = it
+                            screen = Screen.MEASURE_RESULT
+                        },
+                    )
+                }
+            }
+
+            Screen.MEASURE_RESULT -> {
+                val result = measureResult
+                if (result == null) {
+                    screen = measureFrom
+                } else {
+                    MeasureResultScreen(
+                        result = result,
+                        // TODO: measurements 테이블에 저장
+                        onSave = {
+                            Toast.makeText(context, "측정을 저장했어요", Toast.LENGTH_SHORT).show()
+                            measureResult = null
+                            screen = measureFrom
+                        },
+                        onDiscard = {
+                            measureResult = null
+                            screen = measureFrom
+                        },
+                    )
+                }
+            }
+
+            Screen.DETAIL -> {
+                val place = detailPlace
+                val detail = place?.let { sampleDetailFor(it.id) }
+                val noData = place?.let { sampleNoDataFor(it.id) }
+
+                when {
+                    place == null -> screen = Screen.MAP
+
+                    // 소리 · 빛 측정이 없는 장소는 점수를 내지 않는 화면으로 보낸다.
+                    // 같은 상세로 보내면 탭이 통째로 비어서 고장 난 것처럼 보인다
+                    detail == null && noData != null -> NoDataScreen(
+                        place = place,
+                        info = noData,
+                        onBack = { screen = Screen.MAP },
+                        onMeasureClick = { startMeasure(place) },
+                    )
+
+                    else -> PlaceDetailScreen(
+                        place = place,
+                        detail = detail,
+                        nowHour = nowHour,
+                        onBack = { screen = Screen.MAP },
+                        onMeasureClick = { startMeasure(place) },
+                        onVisitClick = { startVisit(place) },
+                        canPersonalize = !isGuest,
+                        onLoginNeeded = { loginSheet = true },
+                    )
+                }
             }
         }
 
-        Screen.VISIT_CARD -> VisitCardScreen(
-            subtitle = activePlan?.let { "${it.place.name} · ${it.whenLabel}" }.orEmpty(),
-            onBack = { screen = cardFrom },
-            onChildViewClick = { screen = Screen.VISIT_CHILD },
-            onDepartClick = { screen = Screen.VISIT_ONSITE },
-            // 그 계획만 빼고 들어온 곳으로. 목록이 비면 지도로
-            onCancelVisit = {
-                activePlan?.let { visitPlans.remove(it) }
-                activePlan = null
-                screen = if (cardFrom == Screen.VISIT_PLANS && visitPlans.isEmpty()) Screen.MAP else cardFrom
-            },
-        )
-
-        Screen.VISIT_CHILD -> ChildViewScreen(onClose = { screen = Screen.VISIT_CARD })
-
-        Screen.VISIT_ONSITE -> OnSiteScreen(
-            placeName = activePlan?.place?.name.orEmpty(),
-            onEndClick = { screen = Screen.VISIT_AFTER },
-        )
-
-        Screen.VISIT_AFTER -> {
-            val plan = activePlan
-            if (plan == null) {
-                screen = Screen.MAP
-            } else {
-                AfterVisitScreen(
-                    placeName = plan.place.name,
-                    whenLabel = plan.whenLabel,
-                    // 기록 탭 맨 위에 새 기록을 넣는다
-                    // TODO: visits 테이블에 저장
-                    onSubmit = { feeling, triggers ->
-                        visits.add(
-                            0,
-                            VisitUi(
-                                placeName = plan.place.name,
-                                visitedAt = plan.recordLabel,
-                                feeling = feeling,
-                                trigger = triggers.joinToString(", ").ifEmpty { null },
-                            ),
-                        )
-                        finishPlan(plan)
-                    },
-                    onSkip = { finishPlan(plan) },
-                )
-            }
-        }
-
-        Screen.MEASURE_PLACE -> MeasurePlaceScreen(
-            onBack = { screen = measureFrom },
-            onPlaceClick = {
-                measurePlace = it
-                screen = Screen.MEASURE_RUN
-            },
-            // TODO: 검색 화면에서 고른 장소로 측정하게 연결
-            onSearchClick = {},
-        )
-
-        Screen.MEASURE_RUN -> {
-            val place = measurePlace
-            if (place == null) {
-                screen = measureFrom
-            } else {
-                MeasuringScreen(
-                    place = place,
-                    onBack = {
-                        screen = if (measureFrom == Screen.MAP) Screen.MEASURE_PLACE else measureFrom
-                    },
-                    onFinish = {
-                        measureResult = it
-                        screen = Screen.MEASURE_RESULT
-                    },
-                )
-            }
-        }
-
-        Screen.MEASURE_RESULT -> {
-            val result = measureResult
-            if (result == null) {
-                screen = measureFrom
-            } else {
-                MeasureResultScreen(
-                    result = result,
-                    // TODO: measurements 테이블에 저장
-                    onSave = {
-                        Toast.makeText(context, "측정을 저장했어요", Toast.LENGTH_SHORT).show()
-                        measureResult = null
-                        screen = measureFrom
-                    },
-                    onDiscard = {
-                        measureResult = null
-                        screen = measureFrom
-                    },
-                )
-            }
-        }
-
-        Screen.DETAIL -> {
-            val place = detailPlace
-            val detail = place?.let { sampleDetailFor(it.id) }
-            val noData = place?.let { sampleNoDataFor(it.id) }
-
-            when {
-                place == null -> screen = Screen.MAP
-
-                // 소리 · 빛 측정이 없는 장소는 점수를 내지 않는 화면으로 보낸다.
-                // 같은 상세로 보내면 탭이 통째로 비어서 고장 난 것처럼 보인다
-                detail == null && noData != null -> NoDataScreen(
-                    place = place,
-                    info = noData,
-                    onBack = { screen = Screen.MAP },
-                    onMeasureClick = { startMeasure(place) },
-                )
-
-                else -> PlaceDetailScreen(
-                    place = place,
-                    detail = detail,
-                    nowHour = nowHour,
-                    onBack = { screen = Screen.MAP },
-                    onMeasureClick = { startMeasure(place) },
-                    onVisitClick = { startVisit(place) },
-                )
-            }
+        if (loginSheet) {
+            LoginRequiredSheet(
+                onKakaoClick = {
+                    loginSheet = false
+                    onLoginClick()
+                },
+                onDismiss = { loginSheet = false },
+            )
         }
     }
 }

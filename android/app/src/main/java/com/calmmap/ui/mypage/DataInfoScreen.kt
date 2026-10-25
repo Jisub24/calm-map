@@ -23,12 +23,12 @@ import androidx.compose.ui.unit.dp
 import com.calmmap.ui.component.SecondaryButton
 import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.theme.CalmMapTheme
-import com.calmmap.ui.theme.Ink
-import com.calmmap.ui.theme.InkMuted
-import com.calmmap.ui.theme.InkSoft
-import com.calmmap.ui.theme.LineSoft
-import com.calmmap.ui.theme.Paper
-import com.calmmap.ui.theme.PaperBox
+import com.calmmap.ui.theme.TextPrimary
+import com.calmmap.ui.theme.TextTertiary
+import com.calmmap.ui.theme.TextSecondary
+import com.calmmap.ui.theme.BorderDefault
+import com.calmmap.ui.theme.BgSurface
+import com.calmmap.ui.theme.BgSubtle
 
 // E3 데이터·개인정보 안내: 무엇을 모으고 무엇을 안 모으는지
 @Composable
@@ -40,7 +40,7 @@ fun DataInfoScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Paper)
+            .background(BgSurface)
             .safeDrawingPadding(),
     ) {
         TopBar(title = "데이터 안내", onBack = onBack)
@@ -75,7 +75,7 @@ fun DataInfoScreen(
             Text(
                 text = "소리 분류는 폰 안에서 끝나요 (온디바이스 AI).",
                 style = MaterialTheme.typography.bodySmall,
-                color = InkMuted,
+                color = TextTertiary,
             )
             Spacer(modifier = Modifier.weight(1f))
         }
@@ -98,15 +98,15 @@ private fun InfoBox(title: String, items: List<String>, filled: Boolean) {
             .fillMaxWidth()
             .clip(shape)
             .then(
-                if (filled) Modifier.background(PaperBox)
-                else Modifier.border(1.dp, LineSoft, shape),
+                if (filled) Modifier.background(BgSubtle)
+                else Modifier.border(1.dp, BorderDefault, shape),
             )
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(text = title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = Ink)
+        Text(text = title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = TextPrimary)
         items.forEach {
-            Text(text = "• $it", style = MaterialTheme.typography.bodyMedium, color = InkSoft)
+            Text(text = "• $it", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
         }
     }
 }

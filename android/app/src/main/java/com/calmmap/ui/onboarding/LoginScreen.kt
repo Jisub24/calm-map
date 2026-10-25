@@ -1,34 +1,43 @@
 package com.calmmap.ui.onboarding
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.calmmap.ui.component.PrimaryButton
+import com.calmmap.ui.component.ButtonVariant
+import com.calmmap.ui.component.CalmButton
+import com.calmmap.ui.component.CalmIcon
+import com.calmmap.ui.component.CalmIcons
+import com.calmmap.ui.component.CalmLogo
 import com.calmmap.ui.component.SecondaryButton
+import com.calmmap.ui.theme.BgSubtle
+import com.calmmap.ui.theme.BgSurface
 import com.calmmap.ui.theme.CalmMapTheme
+import com.calmmap.ui.theme.Radius
+import com.calmmap.ui.theme.TextPrimary
+import com.calmmap.ui.theme.TextSecondary
+import com.calmmap.ui.theme.TextTertiary
+import com.calmmap.ui.theme.caption
 
-// A3 로그인: 카카오 로그인 또는 게스트로 시작. 어느 쪽이든 끝나면 위치 권한 화면으로 간다
+// 최종안 03 로그인: 카카오로 시작하기 또는 로그인 없이 둘러보기
 // 카카오 로그인 처리는 MainActivity 에 있다
-// TODO: 게스트 로그인은 Supabase Auth signInAnonymously 로 붙인다
+// TODO: 로그인 없이 둘러보기(onGuestClick)는 Supabase Auth signInAnonymously 로 붙인다
 @Composable
 fun LoginScreen(
     onKakaoClick: () -> Unit,
@@ -38,87 +47,70 @@ fun LoginScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.White)
-            // 아래 내비게이션 바(◁ ○ □)에 버튼이 가리지 않게 그 높이만큼 띄운다
+            .background(BgSurface)
+            .statusBarsPadding()
             .navigationBarsPadding()
-            .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // 위아래 Spacer 로 로고·앱 이름을 남는 공간 가운데에 둔다
-        Spacer(modifier = Modifier.weight(1f))
-
-        // 로고 자리. 로고 이미지가 나오면 Image 로 바꾼다
-        Box(
-            modifier = Modifier
-                .size(96.dp)
-                .background(Color(0xFFF0F0F0), RoundedCornerShape(24.dp))
-                .border(1.dp, Color(0xFFCCCCCC), RoundedCornerShape(24.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = "로고", fontSize = 12.sp, color = Color(0xFF808080))
-        }
+        Spacer(Modifier.weight(1f))
+        CalmLogo(size = 72.dp)
+        Spacer(Modifier.height(20.dp))
+        Text(text = "무던한 지도", style = MaterialTheme.typography.headlineSmall, color = TextPrimary)
+        Spacer(Modifier.height(8.dp))
         Text(
-            text = "무던한 지도",
-            fontSize = 26.sp,
-            lineHeight = 39.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF212121),
-        )
-        Text(
-            text = "오늘, 무던한 시간에 나가요",
-            fontSize = 14.sp,
-            lineHeight = 21.sp,
-            color = Color(0xFF737373),
-        )
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        // TODO: 실제 디자인 때 카카오 공식 버튼 가이드(노란색, 로고)로 바꾼다
-        PrimaryButton(text = "카카오로 시작하기", onClick = onKakaoClick)
-        SecondaryButton(text = "게스트로 둘러보기", onClick = onGuestClick)
-
-        GuestNotice()
-
-        Text(
-            text = "시작하면 이용약관과 개인정보 처리방침에 동의하게 돼요",
-            fontSize = 11.sp,
-            lineHeight = 16.5.sp,
-            color = Color(0xFF808080),
+            text = "감각이 예민한 아이와 함께\n덜 힘든 시간에 외출해요",
+            style = MaterialTheme.typography.bodyLarge,
+            color = TextSecondary,
             textAlign = TextAlign.Center,
         )
+        Spacer(Modifier.weight(1f))
+
+        CalmButton(text = "카카오로 시작하기", onClick = onKakaoClick, variant = ButtonVariant.Kakao)
+        Spacer(Modifier.height(10.dp))
+        SecondaryButton(text = "로그인 없이 둘러보기", onClick = onGuestClick)
+        Spacer(Modifier.height(16.dp))
+        BrowseInfo()
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = "시작하면 이용약관과 개인정보 처리방침에 동의하게 돼요",
+            style = MaterialTheme.typography.labelSmall,
+            color = TextTertiary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
-// 게스트로 시작하면 기록이 기기에만 남는다는 안내
+// 로그인 없이 할 수 있는 것과 없는 것
 @Composable
-private fun GuestNotice() {
-    Column(
+private fun BrowseInfo() {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp))
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .clip(Radius.card)
+            .background(BgSubtle)
+            .padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(
-            text = "게스트는 앱을 지우면 아이 설정과 방문 기록이 사라져요.",
-            fontSize = 12.sp,
-            lineHeight = 18.sp,
-            color = Color(0xFF595959),
-        )
-        Text(
-            text = "나중에 카카오로 연결하면 기록이 그대로 옮겨져요.",
-            fontSize = 12.sp,
-            lineHeight = 18.sp,
-            color = Color(0xFF595959),
-        )
+        CalmIcon(CalmIcons.Info, size = 18.dp, tint = TextTertiary)
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = "로그인 없이도 지도와 장소별 혼잡도·감각 부담 그래프를 볼 수 있어요.",
+                style = MaterialTheme.typography.caption,
+                color = TextSecondary,
+            )
+            Text(
+                text = "측정, 방문 계획, 우리 아이 맞춤은 로그인 후 쓸 수 있어요.",
+                style = MaterialTheme.typography.caption,
+                color = TextSecondary,
+            )
+        }
     }
 }
 
-@Preview(showBackground = true, widthDp = 360, heightDp = 800)
+@Preview(widthDp = 360, heightDp = 800)
 @Composable
 private fun LoginScreenPreview() {
-    CalmMapTheme {
-        LoginScreen(onKakaoClick = {}, onGuestClick = {})
-    }
+    CalmMapTheme { LoginScreen(onKakaoClick = {}, onGuestClick = {}) }
 }

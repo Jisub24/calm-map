@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 최종안 Icon/volume · 24dp · 선 1.8. 색은 Compose 에서 tint 로 바꾼다 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M4 9.5H7L11.5 5.5V18.5L7 14.5H4V9.5Z"
+        android:strokeColor="#FF1A1D24"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M15.5 9C15.9256 9.37537 16.2665 9.83701 16.5 10.3542C16.7335 10.8715 16.8542 11.4325 16.8542 12C16.8542 12.5675 16.7335 13.1285 16.5 13.6458C16.2665 14.163 15.9256 14.6246 15.5 15M18 6.5C18.7573 7.20208 19.3614 8.05297 19.7746 8.99939C20.1877 9.9458 20.401 10.9673 20.401 12C20.401 13.0327 20.1877 14.0542 19.7746 15.0006C19.3614 15.947 18.7573 16.7979 18 17.5"
+        android:strokeColor="#FF1A1D24"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

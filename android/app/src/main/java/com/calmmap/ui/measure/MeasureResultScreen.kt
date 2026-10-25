@@ -1,44 +1,51 @@
 package com.calmmap.ui.measure
 
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.text.style.TextAlign
+import com.calmmap.ui.component.CalmIcon
+import com.calmmap.ui.component.CalmIcons
+import com.calmmap.ui.component.GhostButton
+import com.calmmap.ui.component.LevelBadge
+import com.calmmap.ui.theme.BgCanvas
+import com.calmmap.ui.theme.BrandPrimary
+import com.calmmap.ui.theme.BrandPrimarySoft
+import com.calmmap.ui.theme.Radius
+import com.calmmap.ui.theme.caption
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.calmmap.ui.component.FilterChip
 import com.calmmap.ui.component.PrimaryButton
-import com.calmmap.ui.component.SecondaryButton
 import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.model.AnnounceAnswer
 import com.calmmap.ui.model.MeasureResult
 import com.calmmap.ui.model.sampleSoundBase
 import com.calmmap.ui.model.samplePlaces
 import com.calmmap.ui.theme.CalmMapTheme
-import com.calmmap.ui.theme.Ink
-import com.calmmap.ui.theme.InkMuted
-import com.calmmap.ui.theme.InkSoft
-import com.calmmap.ui.theme.LineSoft
-import com.calmmap.ui.theme.Paper
-import com.calmmap.ui.theme.PaperBox
+import com.calmmap.ui.theme.TextPrimary
+import com.calmmap.ui.theme.TextTertiary
+import com.calmmap.ui.theme.TextSecondary
+import com.calmmap.ui.theme.BgSurface
+import com.calmmap.ui.theme.BgSubtle
 import java.time.LocalDateTime
 import java.time.format.TextStyle
 import java.util.Locale
@@ -52,65 +59,109 @@ fun MeasureResultScreen(
     onDiscard: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // 화면에는 위 3개만. 나머지는 거의 안 들린 소리다
-    val top = result.sounds.take(3)
+    // 소리 종류 점수 상위 4개를 칸으로. 가장 높은 칸은 파랗게 (주 요인)
+    val top = result.sounds.take(4)
     var announceAnswer by remember { mutableStateOf<AnnounceAnswer?>(null) }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Paper)
-            .safeDrawingPadding(),
+            .background(BgCanvas)
+            .navigationBarsPadding(),
     ) {
-        TopBar(title = "측정 완료")
+        TopBar(title = "측정 완료", background = BgCanvas)
 
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(start = 20.dp, end = 20.dp, top = 4.dp),
+                .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(PaperBox)
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                    .clip(Radius.card)
+                    .background(BgSurface)
+                    .padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = "이번 측정: ${result.level.label}",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Ink,
-                )
-                Text(text = whenLabel(result), style = MaterialTheme.typography.bodySmall, color = InkMuted)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = "이번 측정", style = MaterialTheme.typography.labelLarge, color = TextSecondary, modifier = Modifier.weight(1f))
+                    LevelBadge(level = result.level)
+                }
+                Text(text = whenLabel(result) + " · 평균 ${result.db} dB", style = MaterialTheme.typography.caption, color = TextTertiary)
+                top.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        pair.forEach { sound ->
+                            ScoreTile(
+                                label = sound.label,
+                                value = (sound.score * 100).toInt(),
+                                main = sound == top.first(),
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
             }
 
-            SectionLabel("주요 소리")
-            SoundBars(sounds = top)
             AnnounceResult(
                 taps = result.announceTaps,
                 answer = announceAnswer,
                 onAnswer = { announceAnswer = it },
             )
-            Text(
-                text = "이 장소 측정 ${result.countBefore}회 → ${result.countBefore + 1}회. 시간대 예측이 더 정확해져요.",
-                style = MaterialTheme.typography.bodySmall,
-                color = InkMuted,
-            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(Radius.card)
+                    .background(BgSurface)
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CalmIcon(CalmIcons.Check, size = 18.dp, tint = BrandPrimary)
+                Text(
+                    text = "이 장소 측정 ${result.countBefore}회 → ${result.countBefore + 1}회. 3회부터 '확정'으로 보여드려요",
+                    style = MaterialTheme.typography.caption,
+                    color = TextSecondary,
+                )
+            }
         }
 
         Column(
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            Text(
+                text = "지도에는 잠시 후(약 20분 안) 반영돼요",
+                style = MaterialTheme.typography.caption,
+                color = TextTertiary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            )
             PrimaryButton(
                 text = "저장하기",
                 onClick = { onSave(result.copy(announceAnswer = announceAnswer)) },
             )
-            SecondaryButton(text = "버리기", onClick = onDiscard)
+            GhostButton(text = "버리기", onClick = onDiscard)
         }
+    }
+}
+
+// 점수 칸. 주 요인은 연한 파랑 + 파란 글자
+@Composable
+private fun ScoreTile(label: String, value: Int, main: Boolean, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(Radius.tile)
+            .background(if (main) BrandPrimarySoft else BgSubtle)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(text = label, style = MaterialTheme.typography.caption, color = if (main) BrandPrimary else TextTertiary)
+        Text(text = "$value", style = MaterialTheme.typography.titleLarge, color = if (main) BrandPrimary else TextPrimary)
     }
 }
 
@@ -120,29 +171,21 @@ fun MeasureResultScreen(
  */
 @Composable
 private fun AnnounceResult(taps: Int, answer: AnnounceAnswer?, onAnswer: (AnnounceAnswer) -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape)
-            .border(1.dp, LineSoft, shape)
+            .clip(Radius.card)
+            .background(BgSurface)
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (taps > 0) {
-            Text(
-                text = "안내방송 ${taps}번 (직접 표시)",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = Ink,
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                CalmIcon(CalmIcons.Volume, size = 18.dp, tint = TextSecondary)
+                Text(text = "안내방송 ${taps}번 (직접 표시)", style = MaterialTheme.typography.labelLarge, color = TextPrimary)
+            }
         } else {
-            Text(
-                text = "측정하는 동안 안내방송이 있었나요?",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = Ink,
-            )
+            Text(text = "측정하는 동안 안내방송이 있었나요?", style = MaterialTheme.typography.labelLarge, color = TextPrimary)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AnnounceAnswer.entries.forEach {
                     FilterChip(label = it.label, selected = it == answer, onClick = { onAnswer(it) })
@@ -150,11 +193,6 @@ private fun AnnounceResult(taps: Int, answer: AnnounceAnswer?, onAnswer: (Announ
             }
         }
     }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(text = text, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = InkSoft)
 }
 
 /** "화요일 14:12 · 1분" */

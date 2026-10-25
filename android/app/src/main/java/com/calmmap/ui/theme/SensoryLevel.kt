@@ -17,16 +17,18 @@ import androidx.compose.ui.graphics.Color
  */
 enum class SensoryLevel(
     val label: String,
-    /** 채울 색. null 이면 채우지 않고 테두리로만 그린다 */
+    /** 배지 · 막대를 채울 색. null 이면 채우지 않고 테두리로만 그린다 */
     val fill: Color?,
-    /** 채운 위에 올리는 글자색 */
+    /** 배지 글자색 */
     val onFill: Color,
+    /** 채우지 않는 단계의 테두리 색 */
+    val edge: Color?,
     /** 테두리를 점선으로 그릴지 */
     val dashed: Boolean,
 ) {
-    CALM("무던함", LevelCalm, Ink, false),
-    MID("보통", LevelMid, Ink, false),
-    HIGH("부담 높음", LevelHigh, Paper, false),
-    CANDIDATE("후보", null, Ink, false),
-    NO_DATA("정보 부족", null, InkSoft, true),
+    CALM("무던함", LevelCalm, LevelHigh, null, false),
+    MID("보통", LevelMid, TextPrimary, null, false),
+    HIGH("부담 높음", LevelHigh, LevelOnHigh, null, false),
+    CANDIDATE("후보", null, TextSecondary, LevelOutline, false),
+    NO_DATA("정보 부족", null, TextTertiary, LevelNoData, true),
 }

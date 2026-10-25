@@ -18,11 +18,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.calmmap.ui.model.SoundScore
-import com.calmmap.ui.theme.Ink
-import com.calmmap.ui.theme.InkMuted
-import com.calmmap.ui.theme.LevelHigh
-import com.calmmap.ui.theme.LineFaint
-import java.util.Locale
+import com.calmmap.ui.theme.TextPrimary
+import com.calmmap.ui.theme.TextTertiary
+import com.calmmap.ui.theme.BgSunken
+import com.calmmap.ui.theme.TextSecondary
 
 // 소리 종류별 점수 막대. 측정 중과 측정 결과가 같이 쓴다
 @Composable
@@ -35,16 +34,16 @@ internal fun SoundBars(sounds: List<SoundScore>, modifier: Modifier = Modifier) 
 // 한 줄: 이름 · 막대 · 점수
 @Composable
 private fun SoundBar(sound: SoundScore) {
-    val shape = RoundedCornerShape(5.dp)
+    val shape = RoundedCornerShape(4.dp)
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
             text = sound.label,
             style = MaterialTheme.typography.bodyMedium,
-            color = Ink,
+            color = TextPrimary,
             // "갑작스러운 소리" 가 한 줄에 들어가는 너비
             maxLines = 1,
             modifier = Modifier.width(104.dp),
@@ -52,22 +51,22 @@ private fun SoundBar(sound: SoundScore) {
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(10.dp)
+                .height(8.dp)
                 .clip(shape)
-                .background(LineFaint),
+                .background(BgSunken),
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth(sound.score.coerceIn(0f, 1f))
                     .clip(shape)
-                    .background(LevelHigh),
+                    .background(TextSecondary),
             )
         }
         Text(
-            text = String.format(Locale.US, "%.2f", sound.score),
-            style = MaterialTheme.typography.bodySmall,
-            color = InkMuted,
+            text = "${(sound.score * 100).toInt()}%",
+            style = MaterialTheme.typography.labelMedium,
+            color = TextTertiary,
         )
     }
 }

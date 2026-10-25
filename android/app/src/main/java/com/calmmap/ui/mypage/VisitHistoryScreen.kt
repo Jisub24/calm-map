@@ -2,16 +2,14 @@ package com.calmmap.ui.mypage
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,115 +17,178 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.calmmap.ui.component.BottomTabBar
+import com.calmmap.ui.component.CalmIcon
+import com.calmmap.ui.component.CalmIcons
 import com.calmmap.ui.component.MainTab
-import com.calmmap.ui.component.bottomLine
 import com.calmmap.ui.component.TopBar
+import com.calmmap.ui.component.bottomLine
+import com.calmmap.ui.component.pressFade
 import com.calmmap.ui.model.VisitFeeling
+import com.calmmap.ui.model.VisitPlan
 import com.calmmap.ui.model.VisitUi
 import com.calmmap.ui.model.sampleVisits
+import com.calmmap.ui.theme.BgCanvas
+import com.calmmap.ui.theme.BgSubtle
+import com.calmmap.ui.theme.BgSurface
+import com.calmmap.ui.theme.BorderDefault
+import com.calmmap.ui.theme.BrandOnPrimary
+import com.calmmap.ui.theme.BrandPrimary
+import com.calmmap.ui.theme.BrandPrimaryPressed
 import com.calmmap.ui.theme.CalmMapTheme
-import com.calmmap.ui.theme.Ink
-import com.calmmap.ui.theme.InkMuted
-import com.calmmap.ui.theme.InkSoft
-import com.calmmap.ui.theme.LineFaint
-import com.calmmap.ui.theme.Paper
-import com.calmmap.ui.theme.PaperBox
+import com.calmmap.ui.theme.Radius
+import com.calmmap.ui.theme.StatusCaution
+import com.calmmap.ui.theme.StatusCautionSoft
+import com.calmmap.ui.theme.TextPrimary
+import com.calmmap.ui.theme.TextSecondary
+import com.calmmap.ui.theme.TextTertiary
+import com.calmmap.ui.theme.caption
 
-// E2 방문 기록: 이번 달 요약과 다녀온 곳 목록. 하단 '기록' 탭 화면
+/** 최종안 17 방문 기록: 이번 달 요약 · 예정된 방문(가장 가까운 1개) · 지난 방문 */
 @Composable
 fun VisitHistoryScreen(
     onTabSelect: (MainTab) -> Unit,
     modifier: Modifier = Modifier,
     visits: List<VisitUi> = sampleVisits,
+    plans: List<VisitPlan> = emptyList(),
+    onPlanClick: (VisitPlan) -> Unit = {},
+    onAllPlansClick: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Paper)
-            .safeDrawingPadding(),
+            .background(BgCanvas)
+            .statusBarsPadding(),
     ) {
-        TopBar(title = "방문 기록")
+        TopBar(title = "방문 기록", background = BgCanvas)
 
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 24.dp),
+                .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // TODO: 지금은 목록 전체를 센다. 데이터가 붙으면 이번 달 것만 센다
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryBox(
-                    label = "이번 달 외출",
-                    value = "${visits.size}회",
-                    modifier = Modifier.weight(1f),
-                )
-                SummaryBox(
-                    label = "괜찮았어요",
-                    value = "${visits.count { it.feeling == VisitFeeling.OK }}회",
-                    modifier = Modifier.weight(1f),
-                )
+                StatTile("이번 달 외출", "${visits.size}회", Modifier.weight(1f))
+                StatTile("괜찮았어요", "${visits.count { it.feeling == VisitFeeling.OK }}회", Modifier.weight(1f))
             }
-            Spacer(modifier = Modifier.height(8.dp))
 
-            if (visits.isEmpty()) {
-                Text(
-                    text = "아직 다녀온 곳이 없어요",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = InkMuted,
-                    modifier = Modifier.padding(vertical = 24.dp),
-                )
+            plans.firstOrNull()?.let { next ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SectionLabel("예정된 방문", Modifier.weight(1f))
+                    Text(
+                        text = "모두 보기 ${plans.size} ›",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = BrandPrimary,
+                        modifier = Modifier.pressFade(role = Role.Button, onClick = onAllPlansClick),
+                    )
+                }
+                UpcomingCard(next, onClick = { onPlanClick(next) })
             }
-            visits.forEach { VisitRow(it) }
+
+            SectionLabel("지난 방문")
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(Radius.card)
+                    .background(BgSurface)
+                    .padding(horizontal = 16.dp),
+            ) {
+                if (visits.isEmpty()) {
+                    Text(
+                        text = "아직 다녀온 곳이 없어요",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextTertiary,
+                        modifier = Modifier.padding(vertical = 20.dp),
+                    )
+                }
+                visits.forEachIndexed { i, visit -> VisitRow(visit, divider = i < visits.lastIndex) }
+            }
         }
 
         BottomTabBar(selected = MainTab.HISTORY, onSelect = onTabSelect)
     }
 }
 
-// 숫자 하나를 크게 보여주는 상자
 @Composable
-private fun SummaryBox(label: String, value: String, modifier: Modifier = Modifier) {
+private fun SectionLabel(text: String, modifier: Modifier = Modifier) {
+    Text(text = text, style = MaterialTheme.typography.labelMedium, color = TextTertiary, modifier = modifier)
+}
+
+// 숫자 하나를 크게 보여주는 흰 칸
+@Composable
+private fun StatTile(label: String, value: String, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(PaperBox)
+            .clip(Radius.banner)
+            .background(BgSurface)
             .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Text(text = label, style = MaterialTheme.typography.bodySmall, color = InkMuted)
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleLarge,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = Ink,
-        )
+        Text(text = label, style = MaterialTheme.typography.caption, color = TextTertiary)
+        Text(text = value, style = MaterialTheme.typography.titleLarge, color = TextPrimary)
     }
 }
 
-// 방문 한 줄: 왼쪽에 장소와 시각, 오른쪽에 아이 반응
+// 가장 가까운 예정 방문. 누르면 미리 보는 카드
 @Composable
-private fun VisitRow(visit: VisitUi) {
+private fun UpcomingCard(plan: VisitPlan, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .bottomLine(LineFaint)
-            .padding(vertical = 10.dp),
+            .clip(Radius.card)
+            .background(BgSurface)
+            .pressFade(role = Role.Button, onClick = onClick)
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(text = visit.placeName, style = MaterialTheme.typography.bodyLarge, color = Ink)
-            Text(text = visit.visitedAt, style = MaterialTheme.typography.bodySmall, color = InkMuted)
+        Box(
+            modifier = Modifier
+                .clip(Radius.tile)
+                .background(BrandPrimaryPressed)
+                .padding(10.dp),
+        ) {
+            CalmIcon(CalmIcons.Calendar, size = 20.dp, tint = BrandOnPrimary)
         }
-        // 힘들었으면 원인도 같이: "😣 힘들었어요 · 안내방송"
-        val feeling = listOfNotNull(visit.feeling.label, visit.trigger).joinToString(" · ")
-        Text(text = feeling, style = MaterialTheme.typography.bodySmall, color = InkSoft)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(text = plan.place.name, style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+            Text(text = "${plan.whenLabel} · 미리 보는 카드 준비됨", style = MaterialTheme.typography.caption, color = TextTertiary)
+        }
+        CalmIcon(CalmIcons.ChevronRight, size = 20.dp, tint = TextTertiary)
+    }
+}
+
+// 방문 한 줄: 장소 · 시각, 오른쪽에 결과 태그. 힘들었으면 원인도 같이 주의 색으로
+@Composable
+private fun VisitRow(visit: VisitUi, divider: Boolean) {
+    val hard = visit.feeling == VisitFeeling.HARD
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (divider) Modifier.bottomLine(BorderDefault) else Modifier)
+            .padding(vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(text = visit.placeName, style = MaterialTheme.typography.labelLarge, color = TextPrimary)
+            Text(text = visit.visitedAt, style = MaterialTheme.typography.caption, color = TextTertiary)
+        }
+        Text(
+            text = listOfNotNull(visit.feeling.label, visit.trigger).joinToString(" · "),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (hard) StatusCaution else TextSecondary,
+            modifier = Modifier
+                .clip(Radius.pill)
+                .background(if (hard) StatusCautionSoft else BgSubtle)
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+        )
     }
 }
 

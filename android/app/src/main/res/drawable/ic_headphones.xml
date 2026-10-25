@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 최종안 Icon/headphones · 24dp · 선 1.8. 색은 Compose 에서 tint 로 바꾼다 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M4.5 15V12C4.5 10.0109 5.29018 8.10322 6.6967 6.6967C8.10322 5.29018 10.0109 4.5 12 4.5C13.9891 4.5 15.8968 5.29018 17.3033 6.6967C18.7098 8.10322 19.5 10.0109 19.5 12V15"
+        android:strokeColor="#FF1A1D24"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M6 13.5H5C3.89543 13.5 3 14.3954 3 15.5V19C3 20.1046 3.89543 21 5 21H6C7.10457 21 8 20.1046 8 19V15.5C8 14.3954 7.10457 13.5 6 13.5Z"
+        android:fillColor="#FF1A1D24"
+        android:strokeColor="#FF1A1D24"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M19 13.5H18C16.8954 13.5 16 14.3954 16 15.5V19C16 20.1046 16.8954 21 18 21H19C20.1046 21 21 20.1046 21 19V15.5C21 14.3954 20.1046 13.5 19 13.5Z"
+        android:fillColor="#FF1A1D24"
+        android:strokeColor="#FF1A1D24"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

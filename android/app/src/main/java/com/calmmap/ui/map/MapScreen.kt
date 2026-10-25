@@ -1,5 +1,11 @@
 package com.calmmap.ui.map
 
+import com.calmmap.R
+import androidx.core.content.res.ResourcesCompat
+import android.graphics.Typeface
+import android.graphics.PointF
+import com.calmmap.ui.component.CalmIcon
+import com.calmmap.ui.component.CalmIcons
 import android.os.Bundle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,10 +46,24 @@ import java.time.LocalTime
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.unit.Dp
+import com.calmmap.ui.component.GlyphStyle
+import com.calmmap.ui.component.LevelGlyph
+import com.calmmap.ui.component.calmShadow
+import com.calmmap.ui.theme.BrandPrimary
+import com.calmmap.ui.theme.LevelHigh
+import com.calmmap.ui.theme.Radius
+import com.calmmap.ui.theme.Shadows
+import com.calmmap.ui.theme.TextSecondary
+import com.calmmap.ui.theme.caption
+import com.naver.maps.map.CameraAnimation
+import com.naver.maps.map.CameraUpdate
 import com.calmmap.ui.component.BottomTabBar
 import com.calmmap.ui.component.FilterChip
 import com.calmmap.ui.component.MainTab
-import com.calmmap.ui.component.MicIcon
 import com.calmmap.ui.component.PlaceRow
 import com.calmmap.ui.component.SearchBar
 import com.calmmap.ui.component.outlineBorder
@@ -51,11 +71,10 @@ import com.calmmap.ui.component.pressFade
 import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.VisitPlan
 import com.calmmap.ui.model.samplePlaces
-import com.calmmap.ui.theme.Ink
-import com.calmmap.ui.theme.InkMuted
-import com.calmmap.ui.theme.Line
-import com.calmmap.ui.theme.LineStrong
-import com.calmmap.ui.theme.Paper
+import com.calmmap.ui.theme.TextPrimary
+import com.calmmap.ui.theme.TextTertiary
+import com.calmmap.ui.theme.BorderStrong
+import com.calmmap.ui.theme.BgSurface
 import com.calmmap.ui.theme.SensoryLevel
 import com.naver.maps.geometry.LatLng
 import com.naver.maps.map.CameraPosition
@@ -68,12 +87,17 @@ import com.naver.maps.map.overlay.OverlayImage
 private val HONGDAE = LatLng(37.5566, 126.9237)
 private const val DEFAULT_ZOOM = 15.0
 
+/** 접힌 시트 높이 (최종안 88) */
+private val SheetPeek = 88.dp
+
 /**
- * 와이어프레임 B1 지도 홈.
+ * 최종안 06 지도 홈 · 06-1 방문 예정이 있을 때 · 07 장소 카드.
  *
- * 위에서부터 검색창 · 필터 칩 · 방문 예정 배너 · 지도 · 가까운 장소 목록 · 하단 탭.
+ * 지도가 화면을 꽉 채우고, 그 위에 검색창 · 칩 · 방문 예정 띠 · 측정 · 내 위치 버튼 · 아래 시트가 뜬다.
+ *   아래 시트(접힘)  '지금 무던한 곳 N' + 범례. '전체 보기' 를 누르면 목록이 펼쳐진다
+ *   장소를 누르면    시트가 장소 카드(07)로 바뀌고 칩 · 띠는 접힌다
  *
- * 장소는 아직 임시 데이터다. 10/18 답사에서 가게를 정하면 DB 에서 읽어온다.
+ * 장소는 아직 임시 데이터다. 답사에서 가게를 정하면 DB 에서 읽어온다.
  */
 @Composable
 fun MapScreen(
@@ -81,7 +105,6 @@ fun MapScreen(
     places: List<PlaceUi> = samplePlaces,
     onSearchClick: () -> Unit = {},
     onPlaceClick: (PlaceUi) -> Unit = {},
-    onMeasureClick: () -> Unit = {},
     onTabSelect: (MainTab) -> Unit = {},
     /** 정해 둔 방문. 있으면 위쪽에 '방문 예정' 띠가 뜬다 */
     visitPlan: VisitPlan? = null,
@@ -89,99 +112,114 @@ fun MapScreen(
     /** 방문 예정 띠를 눌렀을 때. 미리 보는 카드를 연다 */
     onVisitPlanClick: () -> Unit = {},
     onVisitDoneClick: () -> Unit = {},
-    /** 띠에 안 보이는 나머지 계획 수. 0 보다 크면 '외 N곳' 이 붙는다 */
+    /** 띠에 안 보이는 나머지 계획 수. 0 보다 크면 둘째 줄이 생긴다 */
     otherVisitCount: Int = 0,
     onOtherVisitsClick: () -> Unit = {},
+    /** 지도의 '측정' 버튼. 장소 고르기 → 측정 중 */
+    onMeasureClick: () -> Unit = {},
 ) {
     var personalized by remember { mutableStateOf(false) }
-    // 장소를 고르면 아래 목록이 그 장소 카드(B2)로 바뀐다
+    // 장소를 고르면 아래 시트가 그 장소 카드로 바뀐다
     var selectedPlace by remember { mutableStateOf<PlaceUi?>(null) }
+    var listOpen by remember { mutableStateOf(false) }
+    var recenterKey by remember { mutableIntStateOf(0) }
     val nowHour = remember { LocalTime.now().hour }
 
     // 소리 · 빛 정보가 없는 장소는 카드를 거치지 않고 바로 상세로 보낸다.
-    // 카드의 알맹이가 권고 시간대와 그래프인데 둘 다 없어서
-    // 이름과 버튼만 남은 빈 카드가 올라온다
+    // 카드의 알맹이가 권고 시간대와 그래프인데 둘 다 없어서 빈 카드가 올라온다
     fun pick(place: PlaceUi) {
         if (place.level == SensoryLevel.NO_DATA) onPlaceClick(place)
         else selectedPlace = place
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Paper)
-            .safeDrawingPadding(),
-    ) {
-        // 장소를 고르면 아래 카드가 커진다. 칩과 배너를 접어 자리를 내준다
-        Column(
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            SearchBar(onClick = onSearchClick)
-            if (selectedPlace == null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(label = "지금", selected = true, onClick = {})
-                    FilterChip(label = "시간 선택 ▾", selected = false, onClick = {})
-                    FilterChip(
-                        label = "우리 아이 맞춤",
-                        selected = personalized,
-                        onClick = { personalized = !personalized },
-                    )
-                }
-            }
-        }
+    // '지금 무던한 곳' 은 부담 높음 · 정보 부족을 뺀다.
+    // TODO: hourly_forecast 를 붙이면 '오늘 중 무던한 시간대가 있는가' 로 바꾼다
+    val calmNow = places.filter { it.level != SensoryLevel.NO_DATA && it.level != SensoryLevel.HIGH }
 
-        if (selectedPlace == null && visitPlan != null) {
-            VisitBanner(
-                placeName = visitPlan.place.name,
-                whenText = "${visitPlan.day.label} ${visitPlan.hour}시",
-                otherCount = otherVisitCount,
-                onClick = onVisitPlanClick,
-                onDoneClick = onVisitDoneClick,
-                onOtherClick = onOtherVisitsClick,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-            )
-        }
-
+    Column(modifier = modifier.fillMaxSize().background(BgSurface)) {
         Box(modifier = Modifier.weight(1f)) {
             NaverMapHost(
                 places = places,
                 selectedPlace = selectedPlace,
                 onPlaceClick = { pick(it) },
-                onMapClick = { selectedPlace = null },
+                onMapClick = {
+                    selectedPlace = null
+                    listOpen = false
+                },
+                recenterKey = recenterKey,
+                bottomInset = SheetPeek,
                 modifier = Modifier.fillMaxSize(),
             )
-            Legend(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(10.dp),
-            )
-            MeasureButton(
-                onClick = onMeasureClick,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(12.dp),
-            )
-        }
 
-        val picked = selectedPlace
-        if (picked == null) {
-            NearbySheet(
-                // 제목이 '무던한 시간이 있는 곳' 이므로 부담 높음과 정보 부족은 뺀다.
-                // 지금은 현재 단계로만 거르지만, hourly_forecast 를 붙이면
-                // '오늘 중에 무던한 시간대가 하나라도 있는가' 로 바꾼다
-                places = places.filter {
-                    it.level != SensoryLevel.NO_DATA && it.level != SensoryLevel.HIGH
-                },
-                onPlaceClick = { pick(it) },
+            // 상태바 글자가 지도 위에서도 읽히도록 위쪽을 흰색으로 흐리게 덮는다
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(72.dp)
+                    .background(Brush.verticalGradient(listOf(BgSurface.copy(alpha = 0.92f), BgSurface.copy(alpha = 0f)))),
             )
-        } else {
-            PlaceSheet(
-                place = picked,
-                nowHour = nowHour,
-                onDetailClick = { onPlaceClick(picked) },
-                onVisitClick = { onVisitClick(picked) },
-            )
+
+            Column(
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                SearchBar(onClick = onSearchClick)
+                if (selectedPlace == null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(label = "지금", selected = true, onClick = {})
+                        // TODO: 시간 선택 시트를 붙인다
+                        FilterChip(label = "시간 선택", selected = false, onClick = {}, trailingIcon = CalmIcons.ChevronDown)
+                        FilterChip(
+                            label = "우리 아이 맞춤",
+                            selected = personalized,
+                            onClick = { personalized = !personalized },
+                        )
+                    }
+                    if (visitPlan != null) {
+                        VisitBanner(
+                            placeName = visitPlan.place.name,
+                            whenText = "${visitPlan.day.label} ${visitPlan.hour}시",
+                            otherCount = otherVisitCount,
+                            onClick = onVisitPlanClick,
+                            onDoneClick = onVisitDoneClick,
+                            onOtherClick = onOtherVisitsClick,
+                        )
+                    }
+                }
+            }
+
+            val picked = selectedPlace
+            Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+                if (picked == null) {
+                    // 오른쪽 아래: 측정 · 내 위치. 둘 다 지도 위에 뜨는 흰 버튼
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .padding(end = 16.dp, bottom = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        MeasureButton(onClick = onMeasureClick)
+                        // TODO: 실제 내 위치를 붙이면 그 자리로 옮긴다. 지금은 처음 위치(홍대)로 돌아간다
+                        LocateButton(onClick = { recenterKey++ })
+                    }
+                    NearbySheet(
+                        places = calmNow,
+                        otherCount = places.size - calmNow.size,
+                        open = listOpen,
+                        onToggle = { listOpen = !listOpen },
+                        onPlaceClick = { pick(it) },
+                    )
+                } else {
+                    PlaceSheet(
+                        place = picked,
+                        nowHour = nowHour,
+                        onDetailClick = { onPlaceClick(picked) },
+                        onVisitClick = { onVisitClick(picked) },
+                    )
+                }
+            }
         }
 
         BottomTabBar(selected = MainTab.MAP, onSelect = onTabSelect)
@@ -189,8 +227,8 @@ fun MapScreen(
 }
 
 /**
- * 방문을 확정한 장소가 있을 때 위쪽에 뜨는 띠.
- * 띠를 누르면 미리 보는 카드(출발하러 가는 길), '다녀왔어요' 는 다녀온 뒤 기록으로 가는 길이다
+ * 방문 예정 띠 (최종안 06-1). 진한 남색 바탕에 흰 글자.
+ * 띠를 누르면 미리 보는 카드(출발하러 가는 길), '다녀왔어요' 는 다녀온 뒤 기록으로 가는 길이다.
  *
  * 계획이 여러 개여도 가장 가까운 하나만 보여준다. 띠를 여러 줄 쌓으면 지도가 가려진다.
  * 나머지가 있으면 둘째 줄 "예정된 방문 N곳 더 보기" 로 목록을 연다
@@ -208,144 +246,166 @@ private fun VisitBanner(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .calmShadow(Shadows.float, Radius.tile)
             .pressFade(role = Role.Button, onClick = onClick)
-            .clip(RoundedCornerShape(8.dp))
-            .background(LineStrong)
-            .padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            .clip(Radius.tile)
+            .background(LevelHigh)
+            .padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = "$placeName · $whenText 방문 예정 ›",
                 style = MaterialTheme.typography.bodySmall,
-                color = Paper,
+                fontWeight = FontWeight.Medium,
+                color = BgSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 // 둘째 줄은 글자가 작아 누르는 영역이 위로 넓어진다(최소 48dp).
                 // 첫 줄도 따로 누를 수 있게 해야 첫 줄을 눌렀을 때 둘째 줄로 가지 않는다
                 modifier = Modifier.pressFade(role = Role.Button, onClick = onClick),
             )
-            // 첫 줄보다 덜 눈에 띄게 연한 글자
             if (otherCount > 0) {
                 Text(
                     text = "예정된 방문 ${otherCount}곳 더 보기 ›",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Line,
-                    modifier = Modifier
-                        .pressFade(role = Role.Button, onClick = onOtherClick)
-                        .padding(top = 2.dp, bottom = 2.dp),
+                    style = MaterialTheme.typography.caption,
+                    color = BorderStrong,
+                    modifier = Modifier.pressFade(role = Role.Button, onClick = onOtherClick),
                 )
             }
         }
-        Box(
+        Text(
+            text = "다녀왔어요",
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+            color = TextPrimary,
             modifier = Modifier
                 .pressFade(role = Role.Button, onClick = onDoneClick)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Paper)
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-        ) {
-            Text(
-                text = "다녀왔어요",
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Medium,
-                color = Ink,
-            )
-        }
-    }
-}
-
-/** 지도 위 왼쪽 위 범례. 색이 아니라 진하기로 읽는 법을 알려준다 */
-@Composable
-private fun Legend(modifier: Modifier = Modifier) {
-    Text(
-        text = "연함=무던함 · 중간=보통 · 진함=부담 높음 · 점선=정보 부족 · 테두리=후보",
-        style = MaterialTheme.typography.labelSmall,
-        color = Ink,
-        modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(Paper.copy(alpha = 0.85f))
-            .padding(horizontal = 6.dp, vertical = 2.dp),
-    )
-}
-
-@Composable
-private fun MeasureButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(percent = 50)
-    Row(
-        modifier = modifier
-            .height(34.dp)
-            .pressFade(role = Role.Button, onClick = onClick)
-            .clip(shape)
-            .background(Paper)
-            .outlineBorder(LineStrong, shape)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        MicIcon(size = 14.dp, color = Ink)
-        Text(
-            text = "측정",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            color = Ink,
+                .clip(Radius.pill)
+                .background(BgSurface)
+                .padding(horizontal = 12.dp, vertical = 7.dp),
         )
     }
 }
 
+/** 지도 오른쪽 아래 측정 버튼. 내 위치 버튼과 같은 흰 바탕 · 높이 44 · Float 그림자 */
+@Composable
+private fun MeasureButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .height(44.dp)
+            .calmShadow(Shadows.float, Radius.pill)
+            .pressFade(role = Role.Button, onClick = onClick)
+            .clip(Radius.pill)
+            .background(BgSurface)
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CalmIcon(CalmIcons.Mic, size = 18.dp, tint = BrandPrimary)
+        Text(text = "측정", style = MaterialTheme.typography.labelLarge, color = TextPrimary)
+    }
+}
+
+/** 지도 오른쪽 아래 내 위치 버튼 (흰 원 44 · Float 그림자) */
+@Composable
+private fun LocateButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(44.dp)
+            .calmShadow(Shadows.float, Radius.pill)
+            .pressFade(role = Role.Button, onClick = onClick)
+            .clip(Radius.pill)
+            .background(BgSurface),
+        contentAlignment = Alignment.Center,
+    ) {
+        CalmIcon(CalmIcons.Locate, size = 20.dp, contentDescription = "내 위치")
+    }
+}
+
 /**
- * 아래에서 올라오는 가까운 장소 목록.
- *
- * 지도에서 마커를 하나씩 눌러보지 않아도 가까운 곳을 훑을 수 있게 한다.
- * 아직 끌어올리는 동작은 없고 접힌 모습만 그린다.
+ * 아래 시트 (최종안 06). 접히면 '지금 무던한 곳 N · 그 밖의 장소 M' 과 범례만,
+ * '전체 보기' 를 누르면 가까운 순 목록이 펼쳐진다.
  */
 @Composable
 private fun NearbySheet(
     places: List<PlaceUi>,
+    otherCount: Int,
+    open: Boolean,
+    onToggle: () -> Unit,
     onPlaceClick: (PlaceUi) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
-            .background(Paper)
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
+            .calmShadow(Shadows.sheet, Radius.sheet)
+            .clip(Radius.sheet)
+            .background(BgSurface)
+            .padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 14.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .width(32.dp)
-                .height(4.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(Line),
-        )
+        SheetHandle(Modifier.align(Alignment.CenterHorizontally))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(top = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            Text(text = "지금 무던한 곳 ", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
+            Text(text = "${places.size}", style = MaterialTheme.typography.titleLarge, color = BrandPrimary)
             Text(
-                text = "오늘 무던한 시간이 있는 곳 ${places.size}",
-                style = MaterialTheme.typography.titleSmall,
-                color = Ink,
+                text = " · 그 밖의 장소 $otherCount",
+                style = MaterialTheme.typography.caption,
+                color = TextTertiary,
+                modifier = Modifier.weight(1f),
             )
             Text(
-                text = "가까운 순",
+                text = if (open) "접기" else "전체 보기",
                 style = MaterialTheme.typography.labelMedium,
-                color = InkMuted,
+                color = TextTertiary,
+                modifier = Modifier
+                    .pressFade(role = Role.Button, onClick = onToggle)
+                    .padding(vertical = 4.dp),
             )
         }
-        places.forEachIndexed { index, place ->
-            PlaceRow(
-                name = place.name,
-                description = place.description,
-                level = place.level,
-                onClick = { onPlaceClick(place) },
-                showDivider = index != places.lastIndex,
-            )
+        LevelLegend(modifier = Modifier.padding(top = 8.dp))
+        if (open) {
+            Column(modifier = Modifier.padding(top = 8.dp)) {
+                places.forEachIndexed { i, place ->
+                    PlaceRow(
+                        name = place.name,
+                        description = place.description,
+                        level = place.level,
+                        onClick = { onPlaceClick(place) },
+                        showDivider = i != places.lastIndex,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 시트 맨 위 손잡이 36×4 */
+@Composable
+internal fun SheetHandle(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(width = 36.dp, height = 4.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(BorderStrong),
+    )
+}
+
+/** 지도 범례. 색이 아니라 진하기 · 테두리로 읽는 법을 알려준다 */
+@Composable
+private fun LevelLegend(modifier: Modifier = Modifier) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        SensoryLevel.entries.forEach { level ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                LevelGlyph(level, style = GlyphStyle.Dot, size = 10.dp)
+                Text(text = level.label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+            }
         }
     }
 }
@@ -363,26 +423,43 @@ private fun NaverMapHost(
     onPlaceClick: (PlaceUi) -> Unit,
     onMapClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** 값이 바뀔 때마다 지도를 처음 위치로 옮긴다 (내 위치 버튼) */
+    recenterKey: Int = 0,
+    /** 지도 아래쪽을 가리는 시트 높이. 네이버 로고 · 축척이 그 위로 올라오게 한다 */
+    bottomInset: Dp = 0.dp,
 ) {
     val density = LocalDensity.current
+    val context = LocalContext.current
+    // 마커 글자도 앱 글꼴로
+    val markerFont = remember { ResourcesCompat.getFont(context, R.font.noto_sans_kr) ?: Typeface.DEFAULT_BOLD }
     var naverMap by remember { mutableStateOf<NaverMap?>(null) }
     val markers = remember { mutableStateListOf<Marker>() }
 
-    // 단계는 다섯 가지뿐이라 그림도 다섯 장만 만들어 두고 돌려 쓴다
-    val icons = remember(density) {
-        SensoryLevel.entries.associateWith { OverlayImage.fromBitmap(markerBitmap(it, density)) }
+    // 마커에 장소 이름이 들어가서 장소마다 한 장씩 만든다. 목록이 바뀔 때만 다시 만든다
+    val icons = remember(places, density) {
+        places.associate { it.id to OverlayImage.fromBitmap(markerBitmap(it.level, it.name, density, typeface = markerFont)) }
     }
-    // 고른 장소는 크고 두꺼운 그림으로 바꿔 어느 것을 눌렀는지 보이게 한다
-    val selectedIcons = remember(density) {
-        SensoryLevel.entries.associateWith {
-            OverlayImage.fromBitmap(markerBitmap(it, density, selected = true))
-        }
+    // 고른 장소는 진한 바탕으로 바꿔 어느 것을 눌렀는지 보이게 한다
+    val selectedIcons = remember(places, density) {
+        places.associate { it.id to OverlayImage.fromBitmap(markerBitmap(it.level, it.name, density, selected = true, typeface = markerFont)) }
     }
 
     NaverMapView(
         modifier = modifier,
         onMapReady = { naverMap = it },
     )
+
+    LaunchedEffect(naverMap, recenterKey) {
+        val map = naverMap ?: return@LaunchedEffect
+        if (recenterKey > 0) map.moveCamera(CameraUpdate.scrollTo(HONGDAE).animate(CameraAnimation.Easing))
+    }
+
+    LaunchedEffect(naverMap, bottomInset) {
+        val map = naverMap ?: return@LaunchedEffect
+        // 최종안에는 +/- 확대 버튼이 없다. 손가락으로 확대한다
+        map.uiSettings.isZoomControlEnabled = false
+        map.setContentPadding(0, 0, 0, with(density) { bottomInset.roundToPx() })
+    }
 
     LaunchedEffect(naverMap, places, selectedPlace) {
         val map = naverMap ?: return@LaunchedEffect
@@ -400,17 +477,12 @@ private fun NaverMapHost(
             markers += Marker().apply {
                 position = place.position
                 val isPicked = place.id == selectedPlace?.id
-                icon = if (isPicked) selectedIcons.getValue(place.level)
-                else icons.getValue(place.level)
+                icon = if (isPicked) selectedIcons.getValue(place.id) else icons.getValue(place.id)
+                // 알약 가운데가 장소 위치에 오게 한다 (기본은 아래 끝)
+                anchor = PointF(0.5f, 0.5f)
                 zIndex = if (isPicked) 1 else 0
-                captionText = place.name
-                captionTextSize = 12f
-                captionColor = Ink.toArgb()
-                captionHaloColor = Paper.toArgb()
-                // 지도가 원래 그리는 글자(역 이름 · 거리 이름)와 자리가 겹치면
-                // 우리 장소 이름이 안 보인다. 우리 것을 우선한다
+                // 지도가 원래 그리는 글자(역 이름 · 거리 이름)와 겹치면 우리 마커를 우선한다
                 isHideCollidedSymbols = true
-                isHideCollidedCaptions = false
                 isForceShowIcon = true
                 setOnClickListener {
                     onPlaceClick(place)

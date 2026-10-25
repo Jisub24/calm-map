@@ -1,5 +1,15 @@
 package com.calmmap.ui.search
 
+import androidx.compose.foundation.border
+import com.calmmap.ui.theme.BgSubtle
+import com.calmmap.ui.theme.BorderStrong
+import com.calmmap.ui.theme.BrandPrimary
+import com.calmmap.ui.theme.Height
+import com.calmmap.ui.theme.Radius
+import com.calmmap.ui.theme.TextSecondary
+import com.calmmap.ui.theme.caption
+import com.calmmap.ui.component.CalmIcon
+import com.calmmap.ui.component.CalmIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,8 +50,6 @@ import com.calmmap.ui.component.FilterChip
 import com.calmmap.ui.component.LevelBadge
 import com.calmmap.ui.component.MainTab
 import com.calmmap.ui.component.PlaceRow
-import com.calmmap.ui.component.SearchIcon
-import com.calmmap.ui.component.BackIcon
 import com.calmmap.ui.component.SmallOutlineButton
 import com.calmmap.ui.component.bottomLine
 import com.calmmap.ui.component.outlineBorder
@@ -49,11 +57,10 @@ import com.calmmap.ui.component.pressFade
 import com.calmmap.ui.component.pressHighlight
 import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.samplePlaces
-import com.calmmap.ui.theme.Ink
-import com.calmmap.ui.theme.InkMuted
-import com.calmmap.ui.theme.LineFaint
-import com.calmmap.ui.theme.LineStrong
-import com.calmmap.ui.theme.Paper
+import com.calmmap.ui.theme.TextPrimary
+import com.calmmap.ui.theme.TextTertiary
+import com.calmmap.ui.theme.BorderDefault
+import com.calmmap.ui.theme.BgSurface
 import com.calmmap.ui.theme.SensoryLevel
 
 /**
@@ -69,100 +76,104 @@ fun SearchScreen(
     onPlaceClick: (PlaceUi) -> Unit,
     modifier: Modifier = Modifier,
     places: List<PlaceUi> = samplePlaces,
-    onTabSelect: (MainTab) -> Unit = {},
 ) {
     var query by remember { mutableStateOf("") }
-    var nearestFirst by remember { mutableStateOf(true) }
-    var onlyCalm by remember { mutableStateOf(false) }
+    var onlyCalm by remember { mutableStateOf(true) }
+    var nearestFirst by remember { mutableStateOf(false) }
+    var onlyOpen by remember { mutableStateOf(false) }
     // 측정을 요청한 장소. 한 사람이 한 번만 누를 수 있다
     val requested = remember { mutableStateListOf<Long>() }
 
-    val results = remember(query, nearestFirst, onlyCalm, places) {
+    val results = remember(query, nearestFirst, onlyCalm, onlyOpen, places) {
         places
             .filter { it.name.contains(query) || it.category.contains(query) }
-            .filter { !onlyCalm || it.level == SensoryLevel.CALM || it.level == SensoryLevel.CANDIDATE }
+            // '무던한 시간 있는 곳' 이 켜져 있어도 정보 부족 · 후보는 남긴다. 숨기면 측정 요청을 할 길이 없다
+            .filter { !onlyCalm || it.level != SensoryLevel.HIGH }
+            .filter { !onlyOpen || it.openNow }
             .sortedBy { if (nearestFirst) it.walkMinutes else it.level.ordinal }
     }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Paper)
+            .background(BgSurface)
             .safeDrawingPadding(),
     ) {
         Column(
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            SearchField(
-                query = query,
-                onQueryChange = { query = it },
-                onBack = onBack,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                FilterChip(
-                    label = "가까운 순",
-                    selected = nearestFirst,
-                    onClick = { nearestFirst = true },
-                )
-                FilterChip(
-                    label = "무던한 시간 있는 곳만",
-                    selected = onlyCalm,
-                    onClick = { onlyCalm = !onlyCalm },
-                )
+            SearchField(query = query, onQueryChange = { query = it }, onBack = onBack)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(label = "무던한 시간 있는 곳", selected = onlyCalm, onClick = { onlyCalm = !onlyCalm })
+                FilterChip(label = "가까운 순", selected = nearestFirst, onClick = { nearestFirst = !nearestFirst })
+                FilterChip(label = "영업 중", selected = onlyOpen, onClick = { onlyOpen = !onlyOpen })
             }
         }
+        // 검색 조건과 결과를 나누는 굵은 회색 띠
+        Box(Modifier.fillMaxWidth().height(8.dp).background(BgSubtle))
 
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 20.dp),
         ) {
             item {
                 Text(
                     text = "검색 결과 ${results.size}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = InkMuted,
-                    modifier = Modifier.padding(bottom = 4.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = TextTertiary,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
                 )
             }
 
             items(results, key = { it.id }) { place ->
-                if (place.level == SensoryLevel.NO_DATA) {
-                    NoDataResult(
-                        place = place,
-                        requested = place.id in requested,
-                        onClick = { onPlaceClick(place) },
-                        onRequest = { requested += place.id },
-                    )
-                } else {
-                    PlaceRow(
-                        name = place.name,
-                        description = place.description,
-                        level = place.level,
-                        onClick = { onPlaceClick(place) },
-                        verticalPadding = 12.dp,
-                    )
-                }
+                PlaceRow(
+                    name = place.name,
+                    description = place.description,
+                    level = place.level,
+                    onClick = { onPlaceClick(place) },
+                    // 정보가 없는 곳은 배지 대신 '측정 요청'. 요청이 많은 곳부터 측정하러 간다
+                    trailing = if (place.level == SensoryLevel.NO_DATA) {
+                        {
+                            val done = place.id in requested
+                            SmallOutlineButton(
+                                text = if (done) "요청함" else "측정 요청 4",
+                                onClick = { requested += place.id },
+                                enabled = !done,
+                                leadingIcon = if (done) CalmIcons.Check else CalmIcons.Plus,
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                )
             }
 
             item {
-                Text(
-                    text = "측정이 부족한 곳은 점수를 지어내지 않고 '정보 부족'으로 보여줘요.",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = InkMuted,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 12.dp),
-                )
+                Row(
+                    modifier = Modifier
+                        .padding(top = 20.dp, bottom = 16.dp)
+                        .fillMaxWidth()
+                        .clip(Radius.card)
+                        .background(BgSubtle)
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    CalmIcon(CalmIcons.Search, size = 16.dp, tint = TextSecondary)
+                    Text(
+                        text = "측정이 부족한 곳은 점수를 지어내지 않고 '정보 부족'으로 보여드려요.",
+                        style = MaterialTheme.typography.caption,
+                        color = TextSecondary,
+                    )
+                }
             }
         }
-
-        BottomTabBar(selected = MainTab.MAP, onSelect = onTabSelect)
     }
 }
 
 /**
- * 뒤로 가기 + 글자를 직접 받는 입력칸.
- *
+ * 뒤로 가기가 안에 든 파란 테두리 입력칸 (최종안 08).
  * 지도 홈의 검색창은 누르면 넘어가는 버튼이지만, 여기서는 진짜 입력칸이다.
  * 화면에 들어오면 바로 글자판이 올라오게 해서 한 번 더 누르지 않게 한다.
  */
@@ -173,113 +184,56 @@ private fun SearchField(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(percent = 50)
     val focusRequester = remember { FocusRequester() }
-
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .height(Height.search)
+            .clip(Radius.pill)
+            .background(BgSurface)
+            .border(1.5.dp, BrandPrimary, Radius.pill)
+            .padding(start = 4.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
-                .pressHighlight(
-                    shape = RoundedCornerShape(percent = 50),
-                    role = Role.Button,
-                    onClick = onBack,
-                ),
+                .size(40.dp)
+                .pressHighlight(shape = Radius.pill, role = Role.Button, onClick = onBack),
             contentAlignment = Alignment.Center,
         ) {
-            BackIcon(size = 20.dp, color = Ink)
+            CalmIcon(CalmIcons.ArrowLeft, contentDescription = "뒤로")
         }
-
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .height(42.dp)
-                .clip(shape)
-                .outlineBorder(LineStrong, shape)
-                .padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            SearchIcon(size = 15.dp, color = Ink)
-            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                if (query.isEmpty()) {
-                    Text(
-                        text = "장소 검색",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = InkMuted,
-                    )
-                }
-                BasicTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = Ink),
-                    cursorBrush = SolidColor(Ink),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester),
-                )
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (query.isEmpty()) {
+                Text(text = "장소·주소 검색", style = MaterialTheme.typography.bodyLarge, color = TextTertiary)
             }
-        }
-    }
-}
-
-/**
- * 소리 · 빛 정보가 없는 장소의 결과 줄.
- *
- * 다른 줄과 달리 아래에 '측정 요청' 버튼이 붙는다.
- * 정보가 없는 곳에서 보호자가 할 수 있는 일을 하나 주기 위한 것이고,
- * 요청이 많은 곳부터 측정하러 가는 기준이 된다.
- */
-@Composable
-private fun NoDataResult(
-    place: PlaceUi,
-    requested: Boolean,
-    onClick: () -> Unit,
-    onRequest: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .bottomLine(LineFaint)
-            .padding(vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .pressFade(role = Role.Button, onClick = onClick),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(modifier = Modifier.weight(1f, fill = false)) {
-                Text(
-                    text = place.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Ink,
-                )
-                Text(
-                    text = place.description,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = InkMuted,
-                )
-            }
-            LevelBadge(
-                level = place.level,
-                modifier = Modifier.padding(start = 8.dp),
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary),
+                cursorBrush = SolidColor(BrandPrimary),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester),
             )
         }
-        SmallOutlineButton(
-            text = if (requested) "요청함" else "측정 요청 · 4명 요청함",
-            onClick = onRequest,
-            enabled = !requested,
-        )
+        if (query.isNotEmpty()) {
+            // 지우기: 회색 원 안의 ×
+            Box(
+                modifier = Modifier
+                    .size(18.dp)
+                    .clip(Radius.pill)
+                    .background(BorderStrong)
+                    .pressFade(role = Role.Button) { onQueryChange("") },
+                contentAlignment = Alignment.Center,
+            ) {
+                CalmIcon(CalmIcons.X, size = 14.dp, tint = BgSurface, contentDescription = "지우기")
+            }
+        }
     }
 }

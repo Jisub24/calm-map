@@ -16,18 +16,20 @@ import androidx.compose.runtime.Composable
  *   보라색 폰에서는 '보통'이 보라색이 되어 설계가 통째로 무너진다.
  */
 private val CalmMapColors = lightColorScheme(
-    primary = LineStrong,
-    onPrimary = Paper,
-    secondary = InkSoft,
-    onSecondary = Paper,
-    background = Paper,
-    onBackground = Ink,
-    surface = Paper,
-    onSurface = Ink,
-    surfaceVariant = PaperBox,
-    onSurfaceVariant = InkSoft,
-    outline = Line,
-    outlineVariant = LineSoft,
+    primary = BrandPrimary,
+    onPrimary = BrandOnPrimary,
+    primaryContainer = BrandPrimarySoft,
+    onPrimaryContainer = BrandPrimary,
+    secondary = TextSecondary,
+    onSecondary = BgSurface,
+    background = BgSurface,
+    onBackground = TextPrimary,
+    surface = BgSurface,
+    onSurface = TextPrimary,
+    surfaceVariant = BgSubtle,
+    onSurfaceVariant = TextSecondary,
+    outline = BorderStrong,
+    outlineVariant = BorderDefault,
 )
 
 @Composable
