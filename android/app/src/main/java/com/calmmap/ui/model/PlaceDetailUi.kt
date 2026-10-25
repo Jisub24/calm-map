@@ -1,5 +1,7 @@
 package com.calmmap.ui.model
 
+import com.calmmap.ui.theme.SensoryLevel
+
 /**
  * 장소 상세(B4)에서만 쓰는 정보.
  *
@@ -47,7 +49,10 @@ data class SoundRow(
 )
 
 data class LightInfo(
-    val lux: String,
+    /** 밝기 (lux) */
+    val lux: Int,
+    /** 밝기만 본 부담 단계. 배지로 보여준다 */
+    val luxLevel: SensoryLevel,
     val flicker: String,
     /** 깜빡임을 실제로 쟀는지. 안 쟀으면 점선으로 그린다 */
     val flickerMeasured: Boolean,
@@ -96,7 +101,8 @@ val sampleMartDetail = PlaceDetailUi(
         SoundRow("경보음 · 사람의 큰 소리", "관측 없음"),
     ),
     light = LightInfo(
-        lux = "420 lux · 보통",
+        lux = 420,
+        luxLevel = SensoryLevel.MID,
         flicker = "미측정",
         flickerMeasured = false,
         note = "미측정은 '깜빡임 없음'이 아니에요. 깜빡이는 조명을 '매우'로 고른 아이에게는 이 장소를 '무던함'으로 추천하지 않아요.",
@@ -131,7 +137,8 @@ val sampleLibraryDetail = PlaceDetailUi(
         SoundRow("경보음 · 사람의 큰 소리", "관측 없음"),
     ),
     light = LightInfo(
-        lux = "350 lux · 보통",
+        lux = 350,
+        luxLevel = SensoryLevel.MID,
         flicker = "없음",
         flickerMeasured = true,
         note = "깜빡임을 측정해서 확인했어요.",
@@ -160,7 +167,8 @@ val sampleCafeDetail = PlaceDetailUi(
         SoundRow("경보음 · 사람의 큰 소리", "관측 없음"),
     ),
     light = LightInfo(
-        lux = "280 lux · 어두움",
+        lux = 280,
+        luxLevel = SensoryLevel.CALM,
         flicker = "미측정",
         flickerMeasured = false,
         note = "미측정은 '깜빡임 없음'이 아니에요.",

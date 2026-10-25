@@ -1,5 +1,8 @@
 package com.calmmap.ui.detail
 
+import com.calmmap.ui.theme.LevelNoData
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -563,9 +566,35 @@ private fun LightCard(detail: PlaceDetailUi) {
             Text(text = "아직 빛 측정이 없어요", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
             return@DetailCard
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            LightTile(icon = CalmIcons.Sun, label = "밝기", value = light.lux, measured = true, modifier = Modifier.weight(1f))
-            LightTile(icon = CalmIcons.Bolt, label = "깜빡임", value = light.flicker, measured = light.flickerMeasured, modifier = Modifier.weight(1f))
+        // 두 칸 높이를 맞춘다. 줄 수가 달라도 키 큰 칸에 맞춰 늘어난다
+        Row(modifier = Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            LightTile(icon = CalmIcons.Sun, label = "밝기", measured = true, modifier = Modifier.weight(1f).fillMaxHeight()) {
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(text = "${light.lux}", style = MaterialTheme.typography.displayMedium, color = TextPrimary)
+                    Text(
+                        text = "lux",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
+                LevelBadge(level = light.luxLevel, modifier = Modifier.padding(top = 4.dp))
+            }
+            LightTile(icon = CalmIcons.Bolt, label = "깜빡임", measured = light.flickerMeasured, modifier = Modifier.weight(1f).fillMaxHeight()) {
+                Text(
+                    text = light.flicker,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = if (light.flickerMeasured) TextPrimary else TextSecondary,
+                )
+                Text(
+                    text = if (light.flickerMeasured) "측정으로 확인했어요" else "폰으로 잴 수 없어요",
+                    style = MaterialTheme.typography.caption,
+                    color = TextTertiary,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
         }
         Row(
             modifier = Modifier
@@ -575,7 +604,12 @@ private fun LightCard(detail: PlaceDetailUi) {
                 .padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            CalmIcon(CalmIcons.Alert, size = 16.dp, tint = if (light.flickerMeasured) TextSecondary else StatusCaution)
+            // 확인된 경우는 안내라 체크, 미측정은 주의
+            CalmIcon(
+                if (light.flickerMeasured) CalmIcons.Check else CalmIcons.Alert,
+                size = 16.dp,
+                tint = if (light.flickerMeasured) TextSecondary else StatusCaution,
+            )
             Text(
                 text = light.note,
                 style = MaterialTheme.typography.caption,
@@ -586,25 +620,33 @@ private fun LightCard(detail: PlaceDetailUi) {
     }
 }
 
-// 밝기 · 깜빡임 칸. 재지 않은 값은 점선 테두리로 '확인 안 됨' 을 보여준다
+// 밝기 · 깜빡임 칸. 재지 않은 값은 흰 바탕 + 점선 테두리로 '확인 안 됨' 을 보여준다
 @Composable
-private fun LightTile(icon: CalmIcons, label: String, value: String, measured: Boolean, modifier: Modifier = Modifier) {
+private fun LightTile(
+    icon: CalmIcons,
+    label: String,
+    measured: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Column(
         modifier = modifier
             .clip(Radius.tile)
             .then(
                 if (measured) Modifier.background(BgSubtle)
-                else Modifier.outlineBorder(com.calmmap.ui.theme.BorderStrong, Radius.tile, dashed = true),
+                else Modifier.background(BgSurface).outlineBorder(LevelNoData, Radius.tile, dashed = true),
             )
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(14.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.padding(bottom = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             CalmIcon(icon, size = 14.dp, tint = TextTertiary)
             Text(text = label, style = MaterialTheme.typography.caption, color = TextTertiary)
         }
-        Text(text = value, style = MaterialTheme.typography.titleSmall, color = if (measured) TextPrimary else TextTertiary)
-        if (!measured) Text(text = "몰라서 쓸 수 없어요", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+        content()
     }
 }
 
