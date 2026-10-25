@@ -1,5 +1,16 @@
 package com.calmmap.ui.component
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.graphics.Path
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,7 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -62,7 +72,7 @@ import kotlin.math.roundToInt
  * 따로 만들면 한쪽만 고치고 다른 쪽을 빠뜨린다.
  * 낮게 잘못 안내하는 오류가 거기서 나온다.
  *
- * 막대를 누르면 그 시간의 말풍선이 뜬다.
+ * 막대를 누르면 그 시간의 말풍선이 뜬다 (작은 그래프는 SelectedHourNote 로 대신).
  * 높이만 봐서는 몇 시인지, 실측인지 추정인지 읽을 수 없기 때문이다.
  */
 @Composable
@@ -82,37 +92,44 @@ fun HourlyBarChart(
     val gap: Dp = if (compact) 3.dp else 4.dp
     val selectedIndex = bars.indexOfFirst { it.hour == selectedHour }.takeIf { it >= 0 }
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        if (selectedIndex != null && !pickMode) {
+    // 말풍선은 그래프 위에 띄운다. 자리를 차지하면 누를 때마다 카드 높이가 바뀌어 아래가 밀린다.
+    // 큰 그래프는 말풍선이 제목을 가리지 않게 막대 위에 빈 자리를 늘 둔다 (최종안 09)
+    val tipRoom = if (!compact && !pickMode) TooltipRoom else 0.dp
+    Box(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().padding(top = tipRoom)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(barHeight)
+                    .let { if (compact) it else it.bottomLine(BorderStrong) },
+                horizontalArrangement = Arrangement.spacedBy(gap),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                bars.forEach { bar ->
+                    BarSlot(
+                        bar = bar,
+                        maxHeight = barHeight,
+                        isSelected = bar.hour == selectedHour,
+                        pickMode = pickMode,
+                        onClick = { onBarClick(bar) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+
+            EvenHourAxis(bars = bars, nowHour = nowHour, gap = gap)
+        }
+
+        // 작은 그래프(장소 카드)는 위에 띄울 자리가 없어서 말풍선 대신 SelectedHourNote 를 쓴다
+        if (selectedIndex != null && !pickMode && !compact) {
             Tooltip(
                 bar = bars[selectedIndex],
                 index = selectedIndex,
                 slotCount = bars.size,
-                modifier = Modifier.padding(bottom = 4.dp),
+                bottom = tipRoom,
+                modifier = Modifier.zIndex(1f),
             )
         }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(barHeight)
-                .let { if (compact) it else it.bottomLine(BorderStrong) },
-            horizontalArrangement = Arrangement.spacedBy(gap),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            bars.forEach { bar ->
-                BarSlot(
-                    bar = bar,
-                    maxHeight = barHeight,
-                    isSelected = bar.hour == selectedHour,
-                    pickMode = pickMode,
-                    onClick = { onBarClick(bar) },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-
-        EvenHourAxis(bars = bars, nowHour = nowHour, gap = gap)
     }
 }
 
@@ -221,45 +238,95 @@ private fun Tooltip(
     bar: HourBar,
     index: Int,
     slotCount: Int,
+    /** 말풍선 꼬리 끝이 닿을 높이 (막대 영역 맨 위) */
+    bottom: Dp,
     modifier: Modifier = Modifier,
 ) {
-    var tipWidth by remember { mutableIntStateOf(0) }
+    var tipSize by remember { mutableStateOf(IntSize.Zero) }
     val density = LocalDensity.current
+    val arrow = 6.dp
 
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val totalPx = with(density) { maxWidth.toPx() }
-        val slot = totalPx / slotCount
-        // 누른 칸의 한가운데에 말풍선 가운데를 맞춘다.
-        // 양 끝 칸에서는 화면 밖으로 나가므로 안쪽으로 당긴다
-        val wanted = slot * (index + 0.5f) - tipWidth / 2f
-        val x = wanted.coerceIn(0f, (totalPx - tipWidth).coerceAtLeast(0f))
+        val arrowPx = with(density) { arrow.toPx() }
+        val bottomPx = with(density) { bottom.toPx() }
+        val center = totalPx / slotCount * (index + 0.5f)
+        // 누른 칸 한가운데에 말풍선 가운데를 맞춘다. 양 끝 칸에서는 안쪽으로 당긴다
+        val x = (center - tipSize.width / 2f).coerceIn(0f, (totalPx - tipSize.width).coerceAtLeast(0f))
 
+        // 꼬리 끝이 막대 영역 맨 위에 닿게 띄운다
+        // 꼬리 줄이 말풍선 너비를 따르도록 가장 넓은 자식 너비에 맞춘다
         Column(
             modifier = Modifier
-                .offset { IntOffset(x.roundToInt(), 0) }
-                .onSizeChanged { tipWidth = it.width }
-                .calmShadow(Shadows.tooltip, Radius.tooltip)
-                .clip(Radius.tooltip)
-                .background(TextPrimary)
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+                .width(IntrinsicSize.Max)
+                .offset { IntOffset(x.roundToInt(), (bottomPx - tipSize.height - 2).roundToInt()) }
+                .onSizeChanged { tipSize = it },
         ) {
-            Text(
-                text = "${bar.hour}시 · ${bar.level?.label ?: "정보 없음"}",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = BgSurface,
-            )
-            Text(
-                text = when {
-                    bar.level == null -> "아직 아무 정보도 없는 시간이에요"
-                    bar.estimated -> "측정된 값이 없어 추정한 값이에요"
-                    else -> "직접 측정한 시간이에요"
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = BgSurface,
-            )
+            Column(
+                modifier = Modifier
+                    .calmShadow(Shadows.tooltip, Radius.tooltip)
+                    .clip(Radius.tooltip)
+                    .background(TextPrimary)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            ) {
+                Text(
+                    text = "${bar.hour}시 · ${bar.level?.label ?: "정보 없음"}",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = BgSurface,
+                )
+                Text(
+                    text = sourceLabel(bar),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = BgSurface,
+                )
+            }
+            // 누른 막대를 가리키는 꼬리. 말풍선이 안쪽으로 당겨져도 막대 위에 온다
+            Canvas(Modifier.fillMaxWidth().height(arrow)) {
+                val tipX = (center - x).coerceIn(arrowPx * 2, size.width - arrowPx * 2)
+                drawPath(
+                    Path().apply {
+                        moveTo(tipX - arrowPx, 0f)
+                        lineTo(tipX + arrowPx, 0f)
+                        lineTo(tipX, size.height)
+                        close()
+                    },
+                    TextPrimary,
+                )
+            }
         }
     }
+}
+
+/** 큰 그래프 막대 위 빈 자리. 말풍선 두 줄 + 꼬리가 들어가는 높이 */
+private val TooltipRoom = 46.dp
+
+/** 그 시간 값이 어디서 왔는지 */
+private fun sourceLabel(bar: HourBar): String = when {
+    bar.level == null -> "아직 아무 정보도 없는 시간이에요"
+    bar.estimated -> "측정된 값이 없어 추정한 값이에요"
+    else -> "직접 측정한 시간이에요"
+}
+
+/**
+ * 장소 카드에서 누른 시간 한 줄. 범례 자리에 바꿔 넣어서 높이가 그대로다
+ * 예) "12시 · 부담 높음 · 직접 측정한 시간이에요"
+ */
+@Composable
+fun SelectedHourNote(bar: HourBar, modifier: Modifier = Modifier) {
+    Text(
+        text = buildAnnotatedString {
+            withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = TextPrimary)) {
+                append("${bar.hour}시 · ${bar.level?.label ?: "정보 없음"}")
+            }
+            append(" · ${sourceLabel(bar)}")
+        },
+        style = MaterialTheme.typography.caption,
+        color = TextSecondary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier,
+    )
 }
 
 /**

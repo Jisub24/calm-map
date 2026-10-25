@@ -5,6 +5,7 @@ import com.calmmap.ui.component.ButtonSize
 import com.calmmap.ui.component.CalmIcon
 import com.calmmap.ui.component.CalmIcons
 import com.calmmap.ui.component.ChartLegend
+import com.calmmap.ui.component.SelectedHourNote
 import com.calmmap.ui.component.calmShadow
 import com.calmmap.ui.theme.BgSubtle
 import com.calmmap.ui.theme.BrandPrimaryPressed
@@ -127,7 +128,13 @@ fun PlaceSheet(
                 onBarClick = { selectedHour = if (selectedHour == it.hour) null else it.hour },
                 modifier = Modifier.padding(top = 14.dp),
             )
-            ChartLegend(modifier = Modifier.padding(top = 8.dp))
+            // 막대를 누르면 범례 자리에 그 시간 설명. 같은 한 줄이라 카드 높이가 바뀌지 않는다
+            val picked = place.hours.firstOrNull { it.hour == selectedHour }
+            if (picked != null) {
+                SelectedHourNote(bar = picked, modifier = Modifier.padding(top = 8.dp))
+            } else {
+                ChartLegend(modifier = Modifier.padding(top = 8.dp))
+            }
         }
 
         place.businessNote?.let { note ->
