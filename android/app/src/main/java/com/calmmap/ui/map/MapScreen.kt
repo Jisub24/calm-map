@@ -93,7 +93,7 @@ private val SheetPeek = 88.dp
 /**
  * 최종안 06 지도 홈 · 06-1 방문 예정이 있을 때 · 07 장소 카드.
  *
- * 지도가 화면을 꽉 채우고, 그 위에 검색창 · 칩 · 방문 예정 띠 · 내 위치 버튼 · 아래 시트가 뜬다.
+ * 지도가 화면을 꽉 채우고, 그 위에 검색창 · 칩 · 방문 예정 띠 · 측정 · 내 위치 버튼 · 아래 시트가 뜬다.
  *   아래 시트(접힘)  '지금 무던한 곳 N' + 범례. '전체 보기' 를 누르면 목록이 펼쳐진다
  *   장소를 누르면    시트가 장소 카드(07)로 바뀌고 칩 · 띠는 접힌다
  *
@@ -115,6 +115,8 @@ fun MapScreen(
     /** 띠에 안 보이는 나머지 계획 수. 0 보다 크면 둘째 줄이 생긴다 */
     otherVisitCount: Int = 0,
     onOtherVisitsClick: () -> Unit = {},
+    /** 지도의 '측정' 버튼. 장소 고르기 → 측정 중 */
+    onMeasureClick: () -> Unit = {},
 ) {
     var personalized by remember { mutableStateOf(false) }
     // 장소를 고르면 아래 시트가 그 장소 카드로 바뀐다
@@ -191,13 +193,17 @@ fun MapScreen(
             val picked = selectedPlace
             Column(modifier = Modifier.align(Alignment.BottomCenter)) {
                 if (picked == null) {
-                    // TODO: 실제 내 위치를 붙이면 그 자리로 옮긴다. 지금은 처음 위치(홍대)로 돌아간다
-                    LocateButton(
-                        onClick = { recenterKey++ },
+                    // 오른쪽 아래: 측정 · 내 위치. 둘 다 지도 위에 뜨는 흰 버튼
+                    Row(
                         modifier = Modifier
                             .align(Alignment.End)
                             .padding(end = 16.dp, bottom = 16.dp),
-                    )
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        MeasureButton(onClick = onMeasureClick)
+                        // TODO: 실제 내 위치를 붙이면 그 자리로 옮긴다. 지금은 처음 위치(홍대)로 돌아간다
+                        LocateButton(onClick = { recenterKey++ })
+                    }
                     NearbySheet(
                         places = calmNow,
                         otherCount = places.size - calmNow.size,
@@ -280,6 +286,25 @@ private fun VisitBanner(
                 .background(BgSurface)
                 .padding(horizontal = 12.dp, vertical = 7.dp),
         )
+    }
+}
+
+/** 지도 오른쪽 아래 측정 버튼. 내 위치 버튼과 같은 흰 바탕 · 높이 44 · Float 그림자 */
+@Composable
+private fun MeasureButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .height(44.dp)
+            .calmShadow(Shadows.float, Radius.pill)
+            .pressFade(role = Role.Button, onClick = onClick)
+            .clip(Radius.pill)
+            .background(BgSurface)
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CalmIcon(CalmIcons.Mic, size = 18.dp, tint = BrandPrimary)
+        Text(text = "측정", style = MaterialTheme.typography.labelLarge, color = TextPrimary)
     }
 }
 

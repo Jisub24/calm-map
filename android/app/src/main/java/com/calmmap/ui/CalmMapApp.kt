@@ -191,6 +191,7 @@ fun CalmMapApp(
                     plansFrom = Screen.MAP
                     screen = Screen.VISIT_PLANS
                 },
+                onMeasureClick = { startMeasure(null) },
             )
 
             Screen.SEARCH -> SearchScreen(
@@ -333,8 +334,6 @@ fun CalmMapApp(
                     measurePlace = it
                     screen = Screen.MEASURE_RUN
                 },
-                // TODO: 검색 화면에서 고른 장소로 측정하게 연결
-                onSearchClick = {},
             )
 
             Screen.MEASURE_RUN -> {
