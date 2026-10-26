@@ -52,8 +52,8 @@ import com.calmmap.ui.theme.TextSecondary
 import com.calmmap.ui.theme.TextTertiary
 import com.calmmap.ui.theme.caption
 
-// TODO: Supabase user_profiles 에서 읽어오면 지운다
-internal val sampleSensitivities = linkedMapOf(
+// 미리보기용
+private val sampleSensitivities = linkedMapOf(
     SensoryFactor.SuddenSound to Sensitivity.Very,
     SensoryFactor.Alarm to Sensitivity.Sensitive,
     SensoryFactor.Crowd to Sensitivity.Sensitive,
@@ -69,10 +69,11 @@ fun MyPageScreen(
     onDataInfoClick: () -> Unit,
     modifier: Modifier = Modifier,
     isGuest: Boolean = false,
-    nickname: String = "OO 보호자",
-    sensitivities: Map<SensoryFactor, Sensitivity> = sampleSensitivities,
+    /** 카카오 프로필 이름 */
+    nickname: String = "보호자",
+    /** 저장된 우리 아이 설정. null 이면 아직 못 읽은 것 */
+    sensitivities: Map<SensoryFactor, Sensitivity>? = null,
     onLoginClick: () -> Unit = {},
-    onProfileEditClick: () -> Unit = {},
     onChildEditClick: () -> Unit = {},
     onAccountClick: () -> Unit = {},
 ) {
@@ -115,10 +116,9 @@ fun MyPageScreen(
                         )
                     }
                 }
+                // 이름은 카카오 것을 그대로 써서 '프로필 수정' 버튼은 두지 않는다
                 if (isGuest) {
                     CalmButton(text = "카카오로 시작하기", onClick = onLoginClick, variant = ButtonVariant.Kakao, size = ButtonSize.M)
-                } else {
-                    SecondaryButton(text = "프로필 수정", onClick = onProfileEditClick, size = ButtonSize.M)
                 }
             }
 
@@ -155,13 +155,14 @@ fun MyPageScreen(
 @Composable
 private fun ChildCard(
     isGuest: Boolean,
-    sensitivities: Map<SensoryFactor, Sensitivity>,
+    sensitivities: Map<SensoryFactor, Sensitivity>?,
     onEditClick: () -> Unit,
 ) {
     WhiteCard(spacing = 12.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(text = "우리 아이", style = MaterialTheme.typography.titleMedium, color = TextPrimary, modifier = Modifier.weight(1f))
-            if (!isGuest) {
+            // 못 읽은 상태에서 고치면 저장된 설정을 처음 값으로 덮어써서 숨긴다
+            if (!isGuest && sensitivities != null) {
                 Text(
                     text = "수정하기",
                     style = MaterialTheme.typography.labelMedium,
@@ -170,10 +171,15 @@ private fun ChildCard(
                 )
             }
         }
-        val picked = sensitivities.filterValues { it != Sensitivity.Normal }
+        val picked = sensitivities.orEmpty().filterValues { it != Sensitivity.Normal }
         when {
             isGuest -> Text(
                 text = "로그인하면 아이가 힘들어하는 자극을 설정하고, 장소 점수를 우리 아이 기준으로 볼 수 있어요.",
+                style = MaterialTheme.typography.caption,
+                color = TextTertiary,
+            )
+            sensitivities == null -> Text(
+                text = "우리 아이 설정을 불러오는 중이에요",
                 style = MaterialTheme.typography.caption,
                 color = TextTertiary,
             )
@@ -182,19 +188,12 @@ private fun ChildCard(
                 style = MaterialTheme.typography.caption,
                 color = TextTertiary,
             )
-            else -> {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    picked.forEach { (factor, level) -> SensitivityTag(factor.label, level) }
-                }
-                // TODO: 방문 기록으로 맞춘 가중치가 생기면 실제 값으로
-                Text(
-                    text = "방문 기록이 쌓이면 아이에게 맞게 가중치를 조금씩 맞춰요",
-                    style = MaterialTheme.typography.caption,
-                    color = TextTertiary,
-                )
+            // 가중치 자동 조절은 020 에서 빠져서 안내 문장 없이 태그만 보여준다
+            else -> FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                picked.forEach { (factor, level) -> SensitivityTag(factor.label, level) }
             }
         }
     }
@@ -266,7 +265,7 @@ private fun MenuRow(
 @Composable
 private fun MyPageScreenPreview() {
     CalmMapTheme {
-        MyPageScreen(onTabSelect = {}, onDataInfoClick = {})
+        MyPageScreen(onTabSelect = {}, onDataInfoClick = {}, nickname = "OO 보호자", sensitivities = sampleSensitivities)
     }
 }
 
