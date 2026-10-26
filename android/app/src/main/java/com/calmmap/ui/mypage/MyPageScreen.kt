@@ -73,6 +73,8 @@ fun MyPageScreen(
     nickname: String = "보호자",
     /** 저장된 우리 아이 설정. null 이면 아직 못 읽은 것 */
     sensitivities: Map<SensoryFactor, Sensitivity>? = null,
+    /** 설정을 읽다가 실패했는지 (인터넷 없음 등) */
+    sensitivitiesFailed: Boolean = false,
     onLoginClick: () -> Unit = {},
     onChildEditClick: () -> Unit = {},
     onAccountClick: () -> Unit = {},
@@ -122,7 +124,7 @@ fun MyPageScreen(
                 }
             }
 
-            ChildCard(isGuest = isGuest, sensitivities = sensitivities, onEditClick = onChildEditClick)
+            ChildCard(isGuest = isGuest, sensitivities = sensitivities, failed = sensitivitiesFailed, onEditClick = onChildEditClick)
 
             Column(
                 modifier = Modifier
@@ -156,6 +158,7 @@ fun MyPageScreen(
 private fun ChildCard(
     isGuest: Boolean,
     sensitivities: Map<SensoryFactor, Sensitivity>?,
+    failed: Boolean,
     onEditClick: () -> Unit,
 ) {
     WhiteCard(spacing = 12.dp) {
@@ -179,7 +182,7 @@ private fun ChildCard(
                 color = TextTertiary,
             )
             sensitivities == null -> Text(
-                text = "우리 아이 설정을 불러오는 중이에요",
+                text = if (failed) "설정을 불러오지 못했어요. 인터넷 연결을 확인해 주세요" else "우리 아이 설정을 불러오는 중이에요",
                 style = MaterialTheme.typography.caption,
                 color = TextTertiary,
             )

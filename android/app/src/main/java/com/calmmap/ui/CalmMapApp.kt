@@ -104,14 +104,18 @@ fun CalmMapApp(
     // 저장된 우리 아이 설정. null 이면 아직 못 읽은 것
     var sensitivities by remember { mutableStateOf<Map<SensoryFactor, Sensitivity>?>(null) }
     var savingChild by remember { mutableStateOf(false) }
+    // 설정을 읽다가 실패했는지. '불러오는 중' 대신 실패 안내를 띄운다
+    var childLoadFailed by remember { mutableStateOf(false) }
     // 내 정보에 들어왔는데 아직 못 읽었으면 읽는다. 실패하면 다음에 들어올 때 다시 읽는다
     LaunchedEffect(isGuest, screen == Screen.ME) {
         if (isGuest || screen != Screen.ME || sensitivities != null) return@LaunchedEffect
+        childLoadFailed = false
         sensitivities = try {
             // 줄이 없으면 아무것도 고르지 않은 것과 같다
             ProfileRepository.load() ?: emptyMap()
         } catch (e: Exception) {
             Log.e("CalmMap", "우리 아이 설정 불러오기 실패", e)
+            childLoadFailed = true
             null
         }
     }
@@ -240,6 +244,7 @@ fun CalmMapApp(
                 isGuest = isGuest,
                 nickname = nickname,
                 sensitivities = sensitivities,
+                sensitivitiesFailed = childLoadFailed,
                 onLoginClick = onLoginClick,
                 onChildEditClick = { screen = Screen.CHILD_EDIT },
                 onAccountClick = { screen = Screen.ACCOUNT },
