@@ -3,6 +3,8 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    // DB 줄을 코틀린 클래스로 바꿀 때 쓴다 (@Serializable)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 // 키를 코드에 적지 않고 local.properties 에서 읽는다.
@@ -71,6 +73,8 @@ dependencies {
     implementation(libs.naver.map.sdk)
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.auth)
+    // 표 읽기 · 쓰기 (supabase.from("표").select())
+    implementation(libs.supabase.postgrest)
     implementation(libs.ktor.client.okhttp)
     // YAMNet 을 폰 안에서 돌린다 (모델: src/main/assets/yamnet.tflite)
     implementation(libs.mediapipe.tasks.audio)
