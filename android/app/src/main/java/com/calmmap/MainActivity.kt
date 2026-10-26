@@ -66,6 +66,8 @@ class MainActivity : ComponentActivity() {
                 var hasProfile by remember { mutableStateOf(false) }
                 // 우리 아이 설정에서 뒤로 가면 돌아갈 곳 (위치 권한 또는 둘러보던 지도)
                 var profileBack by remember { mutableStateOf(StartStep.LocationPermission) }
+                // 우리 아이 설정을 저장하는 중인지
+                var savingProfile by remember { mutableStateOf(false) }
                 val scope = rememberCoroutineScope()
                 // 로그인 상태. 브라우저에서 돌아와 로그인이 끝나면 Authenticated 로 바뀐다
                 val sessionStatus by AuthRepository.status.collectAsStateWithLifecycle()
@@ -157,8 +159,22 @@ class MainActivity : ComponentActivity() {
                             },
                         )
                         StartStep.ChildProfile -> ChildProfileScreen(
-                            // TODO: Supabase profiles 에 저장한 뒤 넘어가게 바꾼다
-                            onStart = { _ -> step = StartStep.Map },
+                            // 저장이 끝나야 지도로. 실패하면 이 화면에 남아서 다시 누를 수 있다
+                            onStart = { values ->
+                                scope.launch {
+                                    savingProfile = true
+                                    try {
+                                        ProfileRepository.save(values)
+                                        hasProfile = true
+                                        step = StartStep.Map
+                                    } catch (e: Exception) {
+                                        Log.e("CalmMap", "우리 아이 설정 저장 실패", e)
+                                        Toast.makeText(this@MainActivity, "저장하지 못했어요. 다시 시도해 주세요", Toast.LENGTH_SHORT).show()
+                                    }
+                                    savingProfile = false
+                                }
+                            },
+                            saving = savingProfile,
                             onBack = { step = profileBack },
                         )
                         StartStep.Map -> CalmMapApp(
