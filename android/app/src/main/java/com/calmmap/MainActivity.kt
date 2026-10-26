@@ -19,6 +19,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.calmmap.data.AuthRepository
+import com.calmmap.data.ProfileRepository
 import com.calmmap.data.supabase
 import com.calmmap.ui.onboarding.ChildProfileScreen
 import com.calmmap.ui.onboarding.LocationPermissionScreen
@@ -27,10 +29,9 @@ import com.calmmap.ui.onboarding.OnboardingScreen
 import com.calmmap.ui.onboarding.SplashScreen
 import com.calmmap.ui.theme.CalmMapTheme
 import com.naver.maps.map.NaverMapSdk
-import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.handleDeeplinks
-import io.github.jan.supabase.auth.providers.Kakao
 import io.github.jan.supabase.auth.status.SessionStatus
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -61,24 +62,58 @@ class MainActivity : ComponentActivity() {
                 var step by remember { mutableStateOf(StartStep.Splash) }
                 // 로그인 없이 둘러보기로 들어왔는지. 그러면 우리 아이 설정을 건너뛰고 지도로 간다
                 var browsing by remember { mutableStateOf(false) }
+                // 로그인한 계정에 우리 아이 설정이 있는지. 위치 권한 다음에 설정 화면을 보일지 정한다
+                var hasProfile by remember { mutableStateOf(false) }
+                // 우리 아이 설정에서 뒤로 가면 돌아갈 곳 (위치 권한 또는 둘러보던 지도)
+                var profileBack by remember { mutableStateOf(StartStep.LocationPermission) }
                 val scope = rememberCoroutineScope()
                 // 로그인 상태. 브라우저에서 돌아와 로그인이 끝나면 Authenticated 로 바뀐다
-                val sessionStatus by supabase.auth.sessionStatus.collectAsStateWithLifecycle()
+                val sessionStatus by AuthRepository.status.collectAsStateWithLifecycle()
 
-                // 로그인 화면에 있는데 로그인이 끝났으면 다음 단계로
+                // 설정이 저장돼 있는지 DB 에서 확인한다.
+                // 못 읽으면(인터넷 없음 등) 있다고 본다. 저장된 설정을 처음 값으로 덮어쓰지 않게
+                suspend fun checkProfile(): Boolean {
+                    hasProfile = try {
+                        ProfileRepository.load() != null
+                    } catch (e: Exception) {
+                        Log.e("CalmMap", "우리 아이 설정 확인 실패", e)
+                        true
+                    }
+                    return hasProfile
+                }
+
+                // 로그인이 끝났을 때 (로그인 화면 또는 둘러보던 지도의 로그인 안내 시트)
                 LaunchedEffect(sessionStatus) {
-                    // 둘러보다가 로그인 안내 시트에서 로그인하면 둘러보기 상태를 끝낸다
-                    if (sessionStatus is SessionStatus.Authenticated) browsing = false
-                    if (sessionStatus is SessionStatus.Authenticated && step == StartStep.Login) {
-                        browsing = false
-                        step = StartStep.LocationPermission
+                    if (sessionStatus !is SessionStatus.Authenticated) return@LaunchedEffect
+                    when {
+                        step == StartStep.Login -> {
+                            browsing = false
+                            checkProfile()
+                            step = StartStep.LocationPermission
+                        }
+                        // 둘러보다 로그인했으면 설정이 없을 때만 설정 화면으로
+                        browsing -> {
+                            browsing = false
+                            if (!checkProfile()) {
+                                profileBack = StartStep.Map
+                                step = StartStep.ChildProfile
+                            }
+                        }
                     }
                 }
 
-                // 처음 한 번만: 1.5초 뒤 스플래시에서 온보딩으로
+                // 처음 한 번만: 스플래시를 1.5초 보여주는 동안 저장된 로그인과 설정을 확인한다
+                // 로그인 + 설정 있음 → 지도 / 로그인만 → 우리 아이 설정 / 로그인 안 됨 → 온보딩
                 LaunchedEffect(Unit) {
+                    val next = async {
+                        when {
+                            !AuthRepository.awaitLoggedIn() -> StartStep.Onboarding
+                            checkProfile() -> StartStep.Map
+                            else -> StartStep.ChildProfile
+                        }
+                    }
                     delay(1500)
-                    step = StartStep.Onboarding
+                    step = next.await()
                 }
 
                 // step 이 바뀔 때 화면을 옆으로 밀어내며 바꾼다
@@ -101,7 +136,7 @@ class MainActivity : ComponentActivity() {
                             onKakaoClick = {
                                 scope.launch {
                                     try {
-                                        supabase.auth.signInWith(Kakao)
+                                        AuthRepository.signInWithKakao()
                                     } catch (e: Exception) {
                                         Log.e("CalmMap", "카카오 로그인 실패", e)
                                         Toast.makeText(this@MainActivity, "로그인하지 못했어요. 다시 시도해 주세요", Toast.LENGTH_SHORT).show()
@@ -116,12 +151,15 @@ class MainActivity : ComponentActivity() {
                             },
                         )
                         StartStep.LocationPermission -> LocationPermissionScreen(
-                            onDone = { step = if (browsing) StartStep.Map else StartStep.ChildProfile },
+                            onDone = {
+                                profileBack = StartStep.LocationPermission
+                                step = if (browsing || hasProfile) StartStep.Map else StartStep.ChildProfile
+                            },
                         )
                         StartStep.ChildProfile -> ChildProfileScreen(
                             // TODO: Supabase profiles 에 저장한 뒤 넘어가게 바꾼다
                             onStart = { _ -> step = StartStep.Map },
-                            onBack = { step = StartStep.LocationPermission },
+                            onBack = { step = profileBack },
                         )
                         StartStep.Map -> CalmMapApp(
                             isGuest = browsing,
@@ -129,7 +167,7 @@ class MainActivity : ComponentActivity() {
                             onLoginClick = {
                                 scope.launch {
                                     try {
-                                        supabase.auth.signInWith(Kakao)
+                                        AuthRepository.signInWithKakao()
                                     } catch (e: Exception) {
                                         Log.e("CalmMap", "카카오 로그인 실패", e)
                                     }
@@ -139,11 +177,12 @@ class MainActivity : ComponentActivity() {
                             onLogout = {
                                 scope.launch {
                                     try {
-                                        supabase.auth.signOut()
+                                        AuthRepository.signOut()
                                     } catch (e: Exception) {
                                         Log.e("CalmMap", "로그아웃 실패", e)
                                     }
                                     browsing = false
+                                    hasProfile = false
                                     step = StartStep.Login
                                 }
                             },
