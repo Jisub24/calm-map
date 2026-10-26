@@ -38,6 +38,14 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.input.pointer.pointerInput
+import com.calmmap.ui.component.pressHighlight
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -217,6 +225,7 @@ fun MapScreen(
                         nowHour = nowHour,
                         onDetailClick = { onPlaceClick(picked) },
                         onVisitClick = { onVisitClick(picked) },
+                        onDismiss = { selectedPlace = null },
                     )
                 }
             }
@@ -343,6 +352,10 @@ private fun NearbySheet(
             .calmShadow(Shadows.sheet, Radius.sheet)
             .clip(Radius.sheet)
             .background(BgSurface)
+            // 시트 위에서 끌면 시트가 움직여야지 뒤의 지도가 움직이면 안 된다.
+            // 위로 끌면 펼치고 아래로 끌면 접는다. 빈 곳을 눌러도 지도로 넘어가지 않게 터치를 여기서 끝낸다
+            .sheetDrag(open = open, onOpen = onToggle, onClose = onToggle)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
             .padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 14.dp),
     ) {
         SheetHandle(Modifier.align(Alignment.CenterHorizontally))
@@ -360,14 +373,22 @@ private fun NearbySheet(
                 color = TextTertiary,
                 modifier = Modifier.weight(1f),
             )
-            Text(
-                text = if (open) "접기" else "전체 보기",
-                style = MaterialTheme.typography.labelMedium,
-                color = TextTertiary,
+            // 글자 대신 화살표. 손잡이 바와 같은 뜻이라 "전체 보기 · 접기" 글자 없이도 읽힌다.
+            // 열리면 180도 돌아 위를 가리킨다
+            Box(
                 modifier = Modifier
-                    .pressFade(role = Role.Button, onClick = onToggle)
-                    .padding(vertical = 4.dp),
-            )
+                    .size(32.dp)
+                    .pressHighlight(shape = Radius.pill, role = Role.Button, onClick = onToggle),
+                contentAlignment = Alignment.Center,
+            ) {
+                CalmIcon(
+                    CalmIcons.ChevronDown,
+                    size = 20.dp,
+                    tint = TextSecondary,
+                    contentDescription = if (open) "목록 접기" else "목록 펼치기",
+                    modifier = Modifier.rotate(if (open) 180f else 0f),
+                )
+            }
         }
         LevelLegend(modifier = Modifier.padding(top = 8.dp))
         if (open) {
@@ -385,6 +406,29 @@ private fun NearbySheet(
         }
     }
 }
+
+/**
+ * 시트 위에서의 세로 끌기. 40dp 넘게 위로 끌면 onOpen, 아래로 끌면 onClose.
+ *
+ * 끌기 이벤트를 여기서 소비하지 않으면 그대로 뒤의 네이버 지도로 내려가서
+ * 시트를 잡아 올리려는데 지도가 밀린다.
+ */
+internal fun Modifier.sheetDrag(open: Boolean, onOpen: () -> Unit, onClose: () -> Unit): Modifier =
+    pointerInput(open) {
+        var dragged = 0f
+        val threshold = 40.dp.toPx()
+        detectVerticalDragGestures(
+            onDragStart = { dragged = 0f },
+            onVerticalDrag = { change, dy ->
+                change.consume()
+                dragged += dy
+            },
+            onDragEnd = {
+                if (dragged < -threshold && !open) onOpen()
+                if (dragged > threshold && open) onClose()
+            },
+        )
+    }
 
 /** 시트 맨 위 손잡이 36×4 */
 @Composable
@@ -434,6 +478,10 @@ private fun NaverMapHost(
     val markerFont = remember { ResourcesCompat.getFont(context, R.font.noto_sans_kr) ?: Typeface.DEFAULT_BOLD }
     var naverMap by remember { mutableStateOf<NaverMap?>(null) }
     val markers = remember { mutableStateListOf<Marker>() }
+    // 방금 누른 마커. 정보 부족 장소는 카드 없이 바로 상세로 가서 눌린 티가 안 났다.
+    // 잠깐 진한 알약으로 바꿔 보여준 뒤 넘어간다
+    var pressedId by remember { mutableStateOf<Any?>(null) }
+    val scope = rememberCoroutineScope()
 
     // 마커에 장소 이름이 들어가서 장소마다 한 장씩 만든다. 목록이 바뀔 때만 다시 만든다
     val icons = remember(places, density) {
@@ -461,7 +509,7 @@ private fun NaverMapHost(
         map.setContentPadding(0, 0, 0, with(density) { bottomInset.roundToPx() })
     }
 
-    LaunchedEffect(naverMap, places, selectedPlace) {
+    LaunchedEffect(naverMap, places, selectedPlace, pressedId) {
         val map = naverMap ?: return@LaunchedEffect
         if (markers.isEmpty()) {
             // 처음 한 번만 홍대로 맞춘다. 매번 하면 사용자가 옮긴 지도가 되돌아간다
@@ -476,7 +524,7 @@ private fun NaverMapHost(
         places.forEach { place ->
             markers += Marker().apply {
                 position = place.position
-                val isPicked = place.id == selectedPlace?.id
+                val isPicked = place.id == selectedPlace?.id || place.id == pressedId
                 icon = if (isPicked) selectedIcons.getValue(place.id) else icons.getValue(place.id)
                 // 알약 가운데가 장소 위치에 오게 한다 (기본은 아래 끝)
                 anchor = PointF(0.5f, 0.5f)
@@ -485,7 +533,13 @@ private fun NaverMapHost(
                 isHideCollidedSymbols = true
                 isForceShowIcon = true
                 setOnClickListener {
-                    onPlaceClick(place)
+                    pressedId = place.id
+                    scope.launch {
+                        delay(120)
+                        onPlaceClick(place)
+                        delay(300)
+                        pressedId = null
+                    }
                     true
                 }
                 this.map = map

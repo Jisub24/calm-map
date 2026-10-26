@@ -64,6 +64,8 @@ fun PlaceSheet(
     onDetailClick: () -> Unit,
     onVisitClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** 카드를 아래로 끌어 내렸을 때. 지도 화면이 고른 장소를 비운다 */
+    onDismiss: () -> Unit = {},
 ) {
     // 그래프에서 누른 시각. 말풍선이 떠 있는 동안만 값이 있다
     var selectedHour by remember { mutableStateOf<Int?>(null) }
@@ -74,6 +76,8 @@ fun PlaceSheet(
             .calmShadow(Shadows.sheet, Radius.sheet)
             .clip(Radius.sheet)
             .background(BgSurface)
+            // 카드 위에서 끌면 지도가 아니라 카드가 반응한다. 아래로 끌면 닫힌다
+            .sheetDrag(open = true, onOpen = {}, onClose = onDismiss)
             // 카드의 빈 곳을 누르면 말풍선을 닫는다.
             // 말풍선을 닫는 방법이 같은 막대를 또 누르는 것뿐이면,
             // 어느 막대를 눌렀는지 잊었을 때 닫을 길이 없다

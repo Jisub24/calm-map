@@ -82,6 +82,24 @@ import com.calmmap.ui.theme.TextPrimary
 import com.calmmap.ui.theme.TextSecondary
 import com.calmmap.ui.theme.TextTertiary
 import com.calmmap.ui.theme.caption
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.zIndex
+import com.calmmap.ui.component.calmShadow
+import com.calmmap.ui.theme.Shadows
+import com.calmmap.ui.theme.BorderStrong
+import kotlin.math.roundToInt
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
@@ -307,64 +325,158 @@ private fun HourlyCard(place: PlaceUi, nowHour: Int, selectedHour: Int?, onBarCl
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(BorderDefault))
-        CardTitle(
-            title = "주변 지역 혼잡",
-            info = "서울시 실시간 도시데이터의 지역 혼잡도예요. 장소 안이 아니라 주변 지역 단위라 참고로만 보여드려요.",
-        )
-        // TODO: 서울시 도시데이터를 붙이면 시간대별 실제 값으로 바꾼다
-        AreaCongestionChart(values = sampleAreaCongestion, nowHour = nowHour)
+        CardTitle(title = "주변 지역 혼잡", info = "서울시가 추정한 혼잡도예요. 매장 안 혼잡도와 다를 수 있어요.")
+        // TODO: hourly_forecast.area_crowd_level 을 붙이면 시간대별 실제 값으로 바꾼다
+        AreaCongestionChart(levels = sampleAreaCongestion, nowHour = nowHour)
     }
 }
 
-// 8 ~ 22시 지역 혼잡 (0 여유 ~ 1 붐빔) 예시
-private val sampleAreaCongestion = listOf(0.1f, 0.1f, 0.1f, 0.3f, 0.45f, 0.62f, 0.4f, 0.3f, 0.3f, 0.55f, 0.8f, 0.8f, 0.6f, 0.35f, 0.15f)
+// 8 ~ 22시 지역 혼잡 1 여유 · 2 보통 · 3 약간 붐빔 · 4 붐빔 (예시)
+private val sampleAreaCongestion = listOf(1, 1, 1, 2, 2, 3, 3, 2, 2, 3, 4, 4, 3, 2, 1)
 private val congestionWords = listOf("여유", "보통", "약간 붐빔", "붐빔")
 
-/** 주변 지역 혼잡 꺾은선 (8~22시). 지금 시각은 파랗게, 말풍선으로 단계 표시 */
+/**
+ * 주변 지역 혼잡 꺾은선 (8~22시). 최종안 09.
+ *
+ *   - 점과 점을 직선으로 잇고 아래를 연하게 채운다
+ *   - 시간마다 흰 속 · 파란 테두리 점. 지금 시각만 속을 채우고 연한 후광을 두른다
+ *   - 보이는 점(지금, 또는 누른 시각)에서 축까지 점선을 내리고 위에 흰 말풍선 "12시 보통"
+ *   - 누르거나 끌면 가장 가까운 시각으로 말풍선이 옮겨 간다 (막대 그래프와 같은 방식)
+ */
 @Composable
-private fun AreaCongestionChart(values: List<Float>, nowHour: Int) {
+private fun AreaCongestionChart(levels: List<Int>, nowHour: Int) {
     val startHour = 8
-    val nowIndex = (nowHour - startHour).coerceIn(0, values.lastIndex)
-    val nowWord = congestionWords[(values[nowIndex] * congestionWords.size).toInt().coerceIn(0, congestionWords.lastIndex)]
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = buildAnnotatedString {
-                append("${startHour + nowIndex}시 ")
-                withStyle(SpanStyle(color = BrandPrimary, fontWeight = FontWeight.Bold)) { append(nowWord) }
-            },
-            style = MaterialTheme.typography.caption,
-            color = TextSecondary,
-        )
-        Canvas(modifier = Modifier.fillMaxWidth().height(72.dp)) {
-            val stepX = size.width / values.lastIndex
-            val pad = 6.dp.toPx()
-            fun pt(i: Int) = Offset(i * stepX, pad + (1 - values[i]) * (size.height - pad * 2))
-            val line = Path().apply {
-                moveTo(pt(0).x, pt(0).y)
-                for (i in 1..values.lastIndex) lineTo(pt(i).x, pt(i).y)
+    val nowIndex = (nowHour - startHour).coerceIn(0, levels.lastIndex)
+    // 누른 칸. 없으면 지금 칸에 말풍선을 둔다
+    var selected by remember { mutableStateOf<Int?>(null) }
+    val shown = selected ?: nowIndex
+
+    val chartHeight = 92.dp
+    val tipRoom = 36.dp     // 말풍선이 제목을 가리지 않게 위에 늘 비워 두는 자리
+    val padTop = 10.dp
+    val padBottom = 14.dp   // 가장 낮은 점(여유)과 바닥선 사이
+    val step = (chartHeight - padTop - padBottom) / 3
+    fun yOf(level: Int) = padTop + step * (4 - level)
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().padding(top = tipRoom), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(chartHeight)
+                    .pointerInput(levels) {
+                        detectTapGestures { pos ->
+                            selected = (pos.x / (size.width / levels.size)).toInt().coerceIn(0, levels.lastIndex)
+                        }
+                    }
+                    .pointerInput(levels) {
+                        detectHorizontalDragGestures { change, _ ->
+                            change.consume()
+                            selected = (change.position.x / (size.width / levels.size)).toInt().coerceIn(0, levels.lastIndex)
+                        }
+                    },
+            ) {
+                val slot = size.width / levels.size
+                val baseY = size.height - 8.dp.toPx()
+                fun pt(i: Int) = Offset(slot * (i + 0.5f), yOf(levels[i]).toPx())
+
+                val line = Path().apply {
+                    moveTo(pt(0).x, pt(0).y)
+                    for (i in 1..levels.lastIndex) lineTo(pt(i).x, pt(i).y)
+                }
+                val area = Path().apply {
+                    addPath(line)
+                    lineTo(pt(levels.lastIndex).x, baseY)
+                    lineTo(pt(0).x, baseY)
+                    close()
+                }
+                drawLine(BorderDefault, Offset(0f, baseY), Offset(size.width, baseY), 1.dp.toPx())
+                drawPath(area, Brush.verticalGradient(listOf(BrandPrimary.copy(alpha = 0.22f), BrandPrimary.copy(alpha = 0.03f))))
+                drawPath(line, BrandPrimary, style = Stroke(1.8.dp.toPx(), cap = StrokeCap.Round))
+
+                // 보이는 점에서 바닥선까지 점선
+                drawLine(
+                    BrandPrimary, Offset(pt(shown).x, pt(shown).y), Offset(pt(shown).x, baseY),
+                    strokeWidth = 1.2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)),
+                )
+                levels.indices.forEach { i ->
+                    val p = pt(i)
+                    when {
+                        i == nowIndex -> {
+                            drawCircle(BrandPrimary.copy(alpha = 0.18f), 8.dp.toPx(), p)
+                            drawCircle(BrandPrimary, 3.5.dp.toPx(), p)
+                            drawCircle(BgSurface, 3.5.dp.toPx(), p, style = Stroke(1.5.dp.toPx()))
+                        }
+                        i == shown -> drawCircle(BrandPrimary, 3.5.dp.toPx(), p)
+                        else -> {
+                            drawCircle(BgSurface, 3.5.dp.toPx(), p)
+                            drawCircle(BrandPrimary, 3.5.dp.toPx(), p, style = Stroke(1.5.dp.toPx()))
+                        }
+                    }
+                }
             }
-            val area = Path().apply {
-                addPath(line)
-                lineTo(size.width, size.height)
-                lineTo(0f, size.height)
-                close()
-            }
-            drawPath(area, Brush.verticalGradient(listOf(BrandPrimarySoft, BrandPrimarySoft.copy(alpha = 0f))))
-            drawLine(LevelOutline, Offset(pt(nowIndex).x, 0f), Offset(pt(nowIndex).x, size.height), 1.dp.toPx())
-            drawPath(line, BrandPrimary, style = Stroke(2.dp.toPx()))
-            values.indices.forEach { i ->
-                drawCircle(BgSurface, 3.5.dp.toPx(), pt(i))
-                drawCircle(BrandPrimary, 3.5.dp.toPx(), pt(i), style = Stroke(1.5.dp.toPx()))
+            Row(Modifier.fillMaxWidth()) {
+                levels.indices.forEach { i ->
+                    val h = startHour + i
+                    Text(
+                        text = if (h % 2 == 0) "$h" else "",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (i == nowIndex) FontWeight.Bold else FontWeight.Normal,
+                        color = if (i == nowIndex) BrandPrimary else TextTertiary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            (startHour..startHour + values.lastIndex step 2).forEach { h ->
-                Text(
-                    text = "$h",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = if (h == startHour + nowIndex) FontWeight.Bold else FontWeight.Normal,
-                    color = if (h == startHour + nowIndex) BrandPrimary else TextTertiary,
-                )
+        PointTip(
+            hour = startHour + shown,
+            word = congestionWords[(levels[shown] - 1).coerceIn(0, 3)],
+            index = shown,
+            slotCount = levels.size,
+            pointTop = tipRoom + yOf(levels[shown]),
+            modifier = Modifier.zIndex(1f),
+        )
+    }
+}
+
+/** 꺾은선 점 위의 흰 말풍선 "12시 보통". 점 바로 위에 꼬리가 닿는다 */
+@Composable
+private fun PointTip(hour: Int, word: String, index: Int, slotCount: Int, pointTop: Dp, modifier: Modifier = Modifier) {
+    var tipSize by remember { mutableStateOf(IntSize.Zero) }
+    val density = LocalDensity.current
+    val arrow = 5.dp
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val totalPx = with(density) { maxWidth.toPx() }
+        val center = totalPx / slotCount * (index + 0.5f)
+        val x = (center - tipSize.width / 2f).coerceIn(0f, (totalPx - tipSize.width).coerceAtLeast(0f))
+        val y = with(density) { (pointTop - arrow - 10.dp).toPx() } - tipSize.height
+        Column(
+            modifier = Modifier
+                .offset { IntOffset(x.roundToInt(), y.roundToInt().coerceAtLeast(0)) }
+                .onSizeChanged { tipSize = it },
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = buildAnnotatedString {
+                    append("${hour}시 ")
+                    withStyle(SpanStyle(color = BrandPrimary, fontWeight = FontWeight.Bold)) { append(word) }
+                },
+                style = MaterialTheme.typography.caption,
+                color = TextSecondary,
+                modifier = Modifier
+                    .calmShadow(Shadows.tooltip, Radius.tooltip)
+                    .clip(Radius.tooltip)
+                    .background(BgSurface)
+                    .border(1.dp, BorderDefault, Radius.tooltip)
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+            )
+            Canvas(Modifier.size(width = arrow * 2, height = arrow)) {
+                val tail = Path().apply {
+                    moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width / 2, size.height); close()
+                }
+                drawPath(tail, BgSurface)
+                drawPath(tail, BorderDefault, style = Stroke(1.dp.toPx()))
             }
         }
     }
@@ -377,7 +489,7 @@ private fun ScoreCard(score: ScoreBreakdown) {
     DetailCard {
         CardTitle(
             title = "${score.hour}시는 왜 ${levelWord(score.total)}인가요",
-            info = "네 가지 중 가장 높은 값이 종합 점수가 돼요. 평균을 내면 한 가지가 심하게 힘든 시간이 묻히기 때문이에요.",
+            info = "네 가지 중 가장 높은 점수가 종합 점수예요.",
         )
         score.factors.forEach { factor ->
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -406,24 +518,33 @@ private fun ScoreCard(score: ScoreBreakdown) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = "종합 점수 · 4개 중 가장 높은 값", style = MaterialTheme.typography.caption, color = TextTertiary)
+                Text(text = "종합 점수", style = MaterialTheme.typography.caption, color = TextTertiary)
                 Text(text = "${score.total}", style = MaterialTheme.typography.displayMedium, color = TextPrimary)
             }
             LevelBadge(level = levelOf(score.total))
         }
         Text(text = score.basis, style = MaterialTheme.typography.caption, color = TextTertiary)
         Box(Modifier.fillMaxWidth().height(1.dp).background(BorderDefault))
-        CardTitle(title = "주변 지역 혼잡", info = "서울시 실시간 도시데이터예요. 장소 안이 아니라 주변 지역 단위예요.")
-        Text(
-            text = score.areaNote,
-            style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(Radius.tile)
-                .background(BgSubtle)
-                .padding(12.dp),
-        )
+        CardTitle(title = "주변 지역 혼잡", info = "서울시가 추정한 혼잡도예요. 매장 안 혼잡도와 다를 수 있어요.")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AreaTile(name = score.areaName, value = score.areaCrowd, modifier = Modifier.weight(1f))
+            AreaTile(name = score.commercialName, value = score.commercialCrowd, modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+/** 주변 지역 · 상권 한 칸. 이름은 작게, 단계는 굵게 */
+@Composable
+private fun AreaTile(name: String, value: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(Radius.tile)
+            .background(BgSubtle)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(text = name, style = MaterialTheme.typography.caption, color = TextTertiary)
+        Text(text = value, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = TextPrimary)
     }
 }
 

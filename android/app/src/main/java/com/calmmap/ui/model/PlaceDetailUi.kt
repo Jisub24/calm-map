@@ -27,8 +27,12 @@ data class ScoreBreakdown(
     val mainFactor: String,
     /** "평일 12시 칸 · 실측 4회 · 중앙값 80 (72~86)" */
     val basis: String,
-    /** 주변 지역 상권 정보. 장소가 아니라 지역 단위라는 것을 분명히 적는다 */
-    val areaNote: String,
+    /** 주변 지역 혼잡 단계 (서울시 · 여유 / 보통 / 약간 붐빔 / 붐빔). 장소가 아니라 동네 단위 */
+    val areaCrowd: String,
+    /** 주변 상권 단계 (서울시 카드 결제 · 한산한 / 보통 / 분주한 / 바쁜). 같은 업종 가게들 기준 */
+    val commercialCrowd: String,
+    val areaName: String = "홍대입구역 일대",
+    val commercialName: String = "홍대 카페 상권",
 )
 
 data class ScoreFactor(
@@ -86,7 +90,8 @@ val sampleMartDetail = PlaceDetailUi(
         ),
         mainFactor = "갑작스러운 소리",
         basis = "평일 12시 칸 · 실측 4회 · 중앙값 80 (72~86)",
-        areaNote = "주변 지역: 홍대 상권 지금 '보통' · 18시부터 '바쁜' 예상 (서울시 실시간 도시데이터)",
+        areaCrowd = "약간 붐빔",
+        commercialCrowd = "보통",
     ),
     sounds = listOf(
         SoundRow(
@@ -128,7 +133,8 @@ val sampleLibraryDetail = PlaceDetailUi(
         ),
         mainFactor = "소리 크기",
         basis = "평일 15시 칸 · 실측 5회 · 중앙값 28 (24~33)",
-        areaNote = "주변 지역: 홍대 상권 지금 '보통' (서울시 실시간 도시데이터)",
+        areaCrowd = "보통",
+        commercialCrowd = "보통",
     ),
     sounds = listOf(
         SoundRow("웅성임 · 음악", "가끔"),
@@ -158,7 +164,8 @@ val sampleCafeDetail = PlaceDetailUi(
         ),
         mainFactor = "갑작스러운 소리",
         basis = "평일 15시 칸 · 실측 6회 · 중앙값 76 (70~84)",
-        areaNote = "주변 지역: 홍대 상권 지금 '바쁜' (서울시 실시간 도시데이터)",
+        areaCrowd = "붐빔",
+        commercialCrowd = "바쁜",
     ),
     sounds = listOf(
         SoundRow("갑작스러운 소리", "1시간에 6회", emphasized = true),
@@ -187,7 +194,8 @@ val sampleBakeryDetail = PlaceDetailUi(
         ),
         mainFactor = "소리 크기",
         basis = "평일 12시 칸 · 실측 1회 · 다른 시간은 추정",
-        areaNote = "주변 지역: 홍대 상권 지금 '보통' (서울시 실시간 도시데이터)",
+        areaCrowd = "보통",
+        commercialCrowd = "보통",
     ),
     sounds = listOf(
         SoundRow("웅성임 · 음악", "계속 들림"),
