@@ -34,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -110,6 +111,9 @@ fun HourlyBarChart(
                         bar = bar,
                         maxHeight = barHeight,
                         isSelected = bar.hour == selectedHour,
+                        // 하나를 고르면 나머지를 흐리게 한다. 진한 막대는 테두리만으로는
+                        // 골랐는지 안 보여서, 고른 것만 또렷하게 남기는 쪽이 분명하다
+                        dimmed = selectedIndex != null && bar.hour != selectedHour && !pickMode,
                         pickMode = pickMode,
                         onClick = { onBarClick(bar) },
                         modifier = Modifier.weight(1f),
@@ -144,6 +148,8 @@ private fun BarSlot(
     bar: HourBar,
     maxHeight: Dp,
     isSelected: Boolean,
+    /** 다른 막대가 선택돼 있어서 이 막대를 흐리게 그릴지 */
+    dimmed: Boolean,
     pickMode: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -154,6 +160,7 @@ private fun BarSlot(
     Column(
         modifier = modifier
             .fillMaxHeight()
+            .alpha(if (dimmed) 0.45f else 1f)
             .clickable(
                 // 누를 때 생기는 물결 효과를 끈다. 막대가 좁아서 지저분해 보인다
                 interactionSource = remember { MutableInteractionSource() },

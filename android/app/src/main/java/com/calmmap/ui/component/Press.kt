@@ -13,7 +13,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.semantics.Role
-import com.calmmap.ui.theme.BgSubtle
+import com.calmmap.ui.theme.BorderDefault
 
 /**
  * 눌렀다는 것을 눈으로 보여주는 두 가지 방법.
@@ -66,12 +66,15 @@ fun Modifier.pressFade(
  *
  * 아이콘은 선 몇 개뿐이라 흐려져도 티가 안 난다.
  * 뒤에 바탕이 생기는 편이 훨씬 분명하다.
+ *
+ * 바탕색은 BgSubtle(#F3F4F6)이 아니라 BorderDefault(#E6E8EC)를 쓴다.
+ * 흰 바탕 위에서 F3F4F6 은 눈에 거의 안 띄어 눌린 줄 모른다 (10/26 확인).
  */
 @Composable
 fun Modifier.pressHighlight(
     shape: Shape,
     role: Role? = null,
-    color: Color = BgSubtle,
+    color: Color = BorderDefault,
     onClick: () -> Unit,
 ): Modifier {
     val interaction = remember { MutableInteractionSource() }
