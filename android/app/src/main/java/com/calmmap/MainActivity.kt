@@ -21,10 +21,12 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.calmmap.data.AuthRepository
 import com.calmmap.data.ProfileRepository
+import com.calmmap.data.isOnline
 import com.calmmap.data.supabase
 import com.calmmap.ui.onboarding.ChildProfileScreen
 import com.calmmap.ui.onboarding.LocationPermissionScreen
 import com.calmmap.ui.onboarding.LoginScreen
+import com.calmmap.ui.onboarding.OfflineScreen
 import com.calmmap.ui.onboarding.OnboardingScreen
 import com.calmmap.ui.onboarding.SplashScreen
 import com.calmmap.ui.theme.CalmMapTheme
@@ -36,7 +38,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // 처음 진입 때 거치는 단계. 위에서 아래 순서로 진행하고, 끝나면 지도 홈으로 간다
-private enum class StartStep { Splash, Onboarding, Login, LocationPermission, ChildProfile, Map }
+private enum class StartStep { Splash, Offline, Onboarding, Login, LocationPermission, ChildProfile, Map }
 
 // 앱의 입구. 앱을 켜면 여기서 첫 화면을 띄운다
 class MainActivity : ComponentActivity() {
@@ -68,6 +70,8 @@ class MainActivity : ComponentActivity() {
                 var profileBack by remember { mutableStateOf(StartStep.LocationPermission) }
                 // 우리 아이 설정을 저장하는 중인지
                 var savingProfile by remember { mutableStateOf(false) }
+                // 인터넷 연결 없음 화면에서 다시 확인하는 중인지
+                var checkingNetwork by remember { mutableStateOf(false) }
                 val scope = rememberCoroutineScope()
                 // 로그인 상태. 브라우저에서 돌아와 로그인이 끝나면 Authenticated 로 바뀐다
                 val sessionStatus by AuthRepository.status.collectAsStateWithLifecycle()
@@ -104,16 +108,18 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // 처음 한 번만: 스플래시를 1.5초 보여주는 동안 저장된 로그인과 설정을 확인한다
-                // 로그인 + 설정 있음 → 지도 / 로그인만 → 우리 아이 설정 / 로그인 안 됨 → 온보딩
+                // 앱을 켤 때 갈 곳. 인터넷 없음 → 연결 없음 안내 / 로그인 + 설정 있음 → 지도 /
+                // 로그인만 → 우리 아이 설정 / 로그인 안 됨 → 온보딩
+                suspend fun firstStep(): StartStep = when {
+                    !isOnline(this@MainActivity) -> StartStep.Offline
+                    !AuthRepository.awaitLoggedIn() -> StartStep.Onboarding
+                    checkProfile() -> StartStep.Map
+                    else -> StartStep.ChildProfile
+                }
+
+                // 처음 한 번만: 스플래시를 1.5초 보여주는 동안 갈 곳을 정한다
                 LaunchedEffect(Unit) {
-                    val next = async {
-                        when {
-                            !AuthRepository.awaitLoggedIn() -> StartStep.Onboarding
-                            checkProfile() -> StartStep.Map
-                            else -> StartStep.ChildProfile
-                        }
-                    }
+                    val next = async { firstStep() }
                     delay(1500)
                     step = next.await()
                 }
@@ -132,6 +138,21 @@ class MainActivity : ComponentActivity() {
                 ) { currentStep ->
                     when (currentStep) {
                         StartStep.Splash -> SplashScreen()
+                        StartStep.Offline -> OfflineScreen(
+                            // 연결됐으면 원래 가려던 곳으로. 아직이면 이 화면에 남는다
+                            onRetry = {
+                                scope.launch {
+                                    checkingNetwork = true
+                                    val next = firstStep()
+                                    if (next == StartStep.Offline) {
+                                        Toast.makeText(this@MainActivity, "아직 인터넷에 연결되지 않았어요", Toast.LENGTH_SHORT).show()
+                                    }
+                                    step = next
+                                    checkingNetwork = false
+                                }
+                            },
+                            checking = checkingNetwork,
+                        )
                         StartStep.Onboarding -> OnboardingScreen(onFinish = { step = StartStep.Login })
                         StartStep.Login -> LoginScreen(
                             // 브라우저로 카카오 로그인 창을 연다. 다음 단계 이동은 위 LaunchedEffect 가 한다
