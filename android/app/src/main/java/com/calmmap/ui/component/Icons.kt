@@ -52,6 +52,7 @@ enum class CalmIcons(@DrawableRes val res: Int) {
     Warning(R.drawable.ic_warning),
     Machine(R.drawable.ic_machine),
     LightDim(R.drawable.ic_light_dim),
+    WifiOff(R.drawable.ic_wifi_off),
 
     /** 카카오 로고. 색을 바꾸지 않는다 */
     Kakao(R.drawable.ic_kakao),
