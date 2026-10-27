@@ -89,8 +89,8 @@ fun SearchScreen(
             .filter { it.name.contains(query) || it.category.contains(query) }
             // '무던한 시간 있는 곳' 이 켜져 있어도 정보 부족 · 후보는 남긴다. 숨기면 측정 요청을 할 길이 없다
             .filter { !onlyCalm || it.level != SensoryLevel.HIGH }
-            .filter { !onlyOpen || it.openNow }
-            .sortedBy { if (nearestFirst) it.walkMinutes else it.level.ordinal }
+            .filter { !onlyOpen || it.openNow == true }
+            .sortedBy { if (nearestFirst) it.walkMinutes ?: Int.MAX_VALUE else it.level.ordinal }
     }
 
     Column(
@@ -138,7 +138,8 @@ fun SearchScreen(
                         {
                             val done = place.id in requested
                             SmallOutlineButton(
-                                text = if (done) "요청함" else "측정 요청 4",
+                                // TODO: measurement_requests 를 연결하면 요청 수를 붙인다
+                                text = if (done) "요청함" else "측정 요청",
                                 onClick = { requested += place.id },
                                 enabled = !done,
                                 leadingIcon = if (done) CalmIcons.Check else CalmIcons.Plus,

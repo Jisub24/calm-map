@@ -17,8 +17,10 @@ data class PlaceUi(
     val level: SensoryLevel,
     /** 목록 한 줄에 들어가는 설명. "도보 6분 · 지금부터 18시까지 · 실측 확인" */
     val description: String,
-    val walkMinutes: Int,
-    val openNow: Boolean,
+    /** 내 위치에서 걸어서 몇 분. 위치를 아직 안 쓰면 null 이고 화면에서 뺀다 */
+    val walkMinutes: Int?,
+    /** 지금 영업 중인지. 영업시간 정보가 없으면 null 이고 화면에서 뺀다 */
+    val openNow: Boolean?,
     /** 카드에서 가장 크게 보이는 문구. 점수보다 무던한 시간을 앞에 둔다 */
     val recommendation: String,
     /** 그 문구의 근거. 어디까지가 실측이고 어디부터가 추정인지 */
@@ -27,7 +29,15 @@ data class PlaceUi(
     val hours: List<HourBar> = emptyList(),
     /** 사업장 웹에서 등록한 무던한 시간. 없으면 null. 점수에는 넣지 않는다 */
     val businessNote: String? = null,
-)
+) {
+    /** 카드 · 상세 제목 아래 한 줄. "카페 · 도보 6분 · 영업 중". 모르는 것은 뺀다 */
+    val infoLine: String
+        get() = buildList {
+            add(category)
+            walkMinutes?.let { add("도보 ${it}분") }
+            openNow?.let { add(if (it) "영업 중" else "영업 종료") }
+        }.joinToString(" · ")
+}
 
 /**
  * 10/18 홍대 답사 전까지 쓰는 임시 데이터.

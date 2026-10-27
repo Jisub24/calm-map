@@ -67,13 +67,10 @@ data class MeasureResult(
         }
 }
 
-// TODO: 측정 횟수는 measurements 테이블에서 센다. 지금은 장소 id 로 정한 예시 값
-fun sampleMeasureCount(placeId: Long): Int = when (placeId % 4) {
-    0L -> 0
-    1L -> 12
-    2L -> 2
-    else -> 5
-}
+// TODO: 측정 횟수는 hourly_forecast 의 실측 횟수로 바꾼다.
+// 장소가 DB 의 실제 장소로 바뀌어서 지어낸 횟수를 보여주지 않게, 측정이 하나도 없는 지금 상태(0)로 둔다
+@Suppress("UNUSED_PARAMETER")
+fun sampleMeasureCount(placeId: Long): Int = 0
 
 /** 측정 횟수가 이보다 적으면 '데이터 부족' */
 const val ENOUGH_MEASURES = 3

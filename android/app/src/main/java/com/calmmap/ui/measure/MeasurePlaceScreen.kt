@@ -48,7 +48,7 @@ fun MeasurePlaceScreen(
     modifier: Modifier = Modifier,
     places: List<PlaceUi> = samplePlaces,
 ) {
-    val sorted = places.sortedBy { it.walkMinutes }
+    val sorted = places.sortedBy { it.walkMinutes ?: Int.MAX_VALUE }
 
     Column(
         modifier = modifier
@@ -79,7 +79,8 @@ fun MeasurePlaceScreen(
                     val need = if (count < ENOUGH_MEASURES) " · 부족" else ""
                     PlaceRow(
                         name = place.name,
-                        description = "${place.walkMinutes * 70}m · 측정 ${count}회$need",
+                        // 걸음 1분 ≈ 70m. 위치를 모르면 거리는 뺀다
+                        description = (place.walkMinutes?.let { "${it * 70}m · " } ?: "") + "측정 ${count}회$need",
                         level = place.level,
                         onClick = { onPlaceClick(place) },
                         showDivider = i < sorted.lastIndex,

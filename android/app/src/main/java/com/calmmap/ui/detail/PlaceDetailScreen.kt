@@ -160,11 +160,7 @@ fun PlaceDetailScreen(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = buildString {
-                        append(place.category)
-                        append(" · 도보 ${place.walkMinutes}분")
-                        append(if (place.openNow) " · 영업 중" else " · 영업 종료")
-                    },
+                    text = place.infoLine,
                     style = MaterialTheme.typography.caption,
                     color = TextTertiary,
                     modifier = Modifier.weight(1f),
