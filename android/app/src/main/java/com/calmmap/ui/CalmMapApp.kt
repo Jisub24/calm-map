@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import com.calmmap.data.AuthRepository
+import com.calmmap.data.PlaceRepository
 import com.calmmap.data.ProfileRepository
 import com.calmmap.ui.component.LoginRequiredSheet
 import com.calmmap.ui.component.MainTab
@@ -104,6 +105,20 @@ fun CalmMapApp(
     // 저장된 우리 아이 설정. null 이면 아직 못 읽은 것
     var sensitivities by remember { mutableStateOf<Map<SensoryFactor, Sensitivity>?>(null) }
     var savingChild by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    // 지도 · 검색 · 측정 장소 고르기가 같이 쓰는 장소 목록. null 이면 아직 못 읽은 것
+    var places by remember { mutableStateOf<List<PlaceUi>?>(null) }
+    // 지도로 올 때 아직 못 읽었으면 읽는다. 실패하면 다음에 지도로 올 때 다시 읽는다
+    LaunchedEffect(screen == Screen.MAP) {
+        if (screen != Screen.MAP || places != null) return@LaunchedEffect
+        places = try {
+            PlaceRepository.loadAll()
+        } catch (e: Exception) {
+            Log.e("CalmMap", "장소 불러오기 실패", e)
+            Toast.makeText(context, "장소를 불러오지 못했어요", Toast.LENGTH_SHORT).show()
+            null
+        }
+    }
     // 설정을 읽다가 실패했는지. '불러오는 중' 대신 실패 안내를 띄운다
     var childLoadFailed by remember { mutableStateOf(false) }
     // 내 정보에 들어왔는데 아직 못 읽었으면 읽는다. 실패하면 다음에 들어올 때 다시 읽는다
@@ -154,7 +169,6 @@ fun CalmMapApp(
     var measurePlace by remember { mutableStateOf<PlaceUi?>(null) }
     var measureResult by remember { mutableStateOf<MeasureResult?>(null) }
     var measureFrom by remember { mutableStateOf(Screen.MAP) }
-    val context = LocalContext.current
 
     // 장소 상세에서는 장소가 정해져 있어서 바로 측정 중으로
     fun startMeasure(place: PlaceUi?) {
@@ -201,6 +215,7 @@ fun CalmMapApp(
     Box {
         when (screen) {
             Screen.MAP -> MapScreen(
+                places = places.orEmpty(),
                 onSearchClick = { screen = Screen.SEARCH },
                 onPlaceClick = { openDetail(it) },
                 onTabSelect = { selectTab(it) },
@@ -217,6 +232,7 @@ fun CalmMapApp(
             )
 
             Screen.SEARCH -> SearchScreen(
+                places = places.orEmpty(),
                 onBack = { screen = Screen.MAP },
                 onPlaceClick = { openDetail(it) },
             )
@@ -355,6 +371,7 @@ fun CalmMapApp(
             }
 
             Screen.MEASURE_PLACE -> MeasurePlaceScreen(
+                places = places.orEmpty(),
                 onBack = { screen = measureFrom },
                 onPlaceClick = {
                     measurePlace = it
@@ -411,7 +428,7 @@ fun CalmMapApp(
 
                     // 소리 · 빛 측정이 없는 장소는 점수를 내지 않는 화면으로 보낸다.
                     // 같은 상세로 보내면 탭이 통째로 비어서 고장 난 것처럼 보인다
-                    detail == null && noData != null -> NoDataScreen(
+                    detail == null -> NoDataScreen(
                         place = place,
                         info = noData,
                         onBack = { screen = Screen.MAP },

@@ -65,7 +65,8 @@ private val congestionSteps = listOf("여유", "보통", "약간 붐빔", "붐�
 @Composable
 fun NoDataScreen(
     place: PlaceUi,
-    info: NoDataUi,
+    /** 지역 혼잡 · 후기 · 요청 수. 아직 DB 에서 못 가져오는 장소는 null 이고 그 카드들을 뺀다 */
+    info: NoDataUi?,
     onBack: () -> Unit,
     onMeasureClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -89,7 +90,7 @@ fun NoDataScreen(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "${place.category} · 도보 ${place.walkMinutes}분 · ${if (place.openNow) "영업 중" else "영업 종료"}",
+                    text = place.infoLine,
                     style = MaterialTheme.typography.caption,
                     color = TextTertiary,
                     modifier = Modifier.weight(1f),
@@ -115,14 +116,17 @@ fun NoDataScreen(
                 )
             }
 
-            AreaCongestionCard(info)
+            // TODO: congestion · visits · measurement_requests 를 연결하면 DB 장소에도 보인다
+            if (info != null) {
+                AreaCongestionCard(info)
 
-            WhiteCard {
-                Text(text = "보호자 후기 ${info.reviewTotal}건", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
-                Text(text = "점수에는 넣지 않아요", style = MaterialTheme.typography.caption, color = TextTertiary)
-                Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ReviewPill("괜찮았어요", info.reviewGood, Modifier.weight(1f))
-                    ReviewPill("힘들었어요", info.reviewHard, Modifier.weight(1f))
+                WhiteCard {
+                    Text(text = "보호자 후기 ${info.reviewTotal}건", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+                    Text(text = "점수에는 넣지 않아요", style = MaterialTheme.typography.caption, color = TextTertiary)
+                    Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReviewPill("괜찮았어요", info.reviewGood, Modifier.weight(1f))
+                        ReviewPill("힘들었어요", info.reviewHard, Modifier.weight(1f))
+                    }
                 }
             }
 
@@ -137,8 +141,9 @@ fun NoDataScreen(
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     CalmIcon(CalmIcons.Users, size = 20.dp, tint = BrandPrimaryPressed)
+                    val requests = (info?.requestCount ?: 0) + if (requested) 1 else 0
                     Text(
-                        text = "지금 ${info.requestCount + if (requested) 1 else 0}명이 측정을 요청했어요",
+                        text = if (requests == 0) "아직 측정 요청이 없어요" else "지금 ${requests}명이 측정을 요청했어요",
                         style = MaterialTheme.typography.labelLarge,
                         color = BrandPrimaryPressed,
                     )
