@@ -179,20 +179,42 @@ def combine(loudness, sound, light, crowd):
 # 측정 1건 → 점수 묶음
 # -----------------------------------------------------
 
+_warned_models = set()
+
+
+def device_offset(device_model, s):
+    """기종 보정값 (db 는 더하고, lux 는 곱해서 기준 기종 단위로). 모르는 기종은 0 · 1.
+
+    기준은 갤럭시 SM-F766 (앱이 쓰는 안드로이드 마이크 · 조도센서). 아이폰으로 잰 답사 7건처럼
+    다른 방식의 측정은 먼저 그 단위로 바꿔야 한다. 키는 device_model 의 앞부분과 맞으면 된다.
+    """
+    table = s.get("device_offsets", {})
+    for key, off in table.items():
+        if device_model and device_model.startswith(key):
+            return off.get("db", 0.0), off.get("lux", 1.0)
+    if device_model not in _warned_models:
+        _warned_models.add(device_model)
+        print(f"[경고] 기종 '{device_model}' 의 보정값이 settings.device_offsets 에 없어 보정 없이 계산합니다")
+    return 0.0, 1.0
+
+
 def score_measurement(m, s):
     """measurements 한 줄(사전)을 점수로 바꾼다. 너무 짧으면 None.
 
-    쓰는 칸: duration_sec, avg_db(=Leq), sudden_count, sudden_strong_count, sudden_max_rise,
-            announce_count, announce_level, crowd_level, avg_lux(=조도 중앙값), lux_status
+    쓰는 칸: device_model, duration_sec, avg_db(=Leq), sudden_count, sudden_strong_count,
+            sudden_max_rise, announce_count, announce_level, crowd_level,
+            avg_lux(=조도 중앙값), lux_status
     """
     if m["duration_sec"] < s["measure_min_sec"]:
         return None
-    loudness = score_loudness(m["avg_db"], s)
+    db_add, lux_mul = device_offset(m.get("device_model"), s)
+    loudness = score_loudness(m["avg_db"] + db_add, s)
     sound, sound_from, sound_parts = score_sound(
         m.get("sudden_count"), m.get("sudden_strong_count"), m.get("sudden_max_rise"),
         m.get("announce_count"), m.get("announce_level"),
         m["duration_sec"], s)
-    light = score_light(m.get("avg_lux"), m.get("lux_status"), s)
+    lux = None if m.get("avg_lux") is None else m["avg_lux"] * lux_mul
+    light = score_light(lux, m.get("lux_status"), s)
     crowd = score_crowd(m.get("crowd_level"), s)
     total, main = combine(loudness, sound, light, crowd)
     return {
@@ -229,6 +251,7 @@ def rows_from_sheet(path):
                 "place_id": int(r["place_id"]),
                 "place_name": r["place_name"],
                 "duration_sec": int(r["duration_sec"]),
+                "device_model": r.get("device_model", "iPhone 15"),
                 "avg_db": _num(r["leq_db"]),
                 "sudden_count": int(r["sudden_count"]),
                 "sudden_strong_count": int(r["sudden_strong_count"]),
