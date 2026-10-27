@@ -71,6 +71,8 @@ fun ChildProfileScreen(
     initial: Map<SensoryFactor, Sensitivity> = emptyMap(),
     // 내 정보에서 고칠 때는 "저장"
     confirmText: String = "저장하고 시작하기",
+    // 저장하는 동안 버튼을 막아 두 번 저장되지 않게
+    saving: Boolean = false,
 ) {
     val sensitivities = remember {
         mutableStateMapOf<SensoryFactor, Sensitivity>().apply {
@@ -131,7 +133,7 @@ fun ChildProfileScreen(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
             )
-            PrimaryButton(text = confirmText, onClick = { onStart(sensitivities.toMap()) })
+            PrimaryButton(text = confirmText, enabled = !saving, onClick = { onStart(sensitivities.toMap()) })
         }
     }
 }

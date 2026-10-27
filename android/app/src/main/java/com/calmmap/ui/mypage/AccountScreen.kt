@@ -47,8 +47,8 @@ fun AccountScreen(
     onLogout: () -> Unit,
     onWithdraw: () -> Unit,
     modifier: Modifier = Modifier,
-    // TODO: 가입일 · 개수는 Supabase 에서 읽어온다
     joinedAt: String = "2026.10.24",
+    // TODO: 개수는 방문 · 측정을 연결하면 Supabase 에서 읽어온다
     visitCount: Int = 6,
     measuredCount: Int = 3,
     childCount: Int = 1,

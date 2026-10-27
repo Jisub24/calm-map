@@ -4,6 +4,7 @@ import com.calmmap.BuildConfig
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.FlowType
 import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.postgrest.Postgrest
 
 // 로그인 후 브라우저가 앱으로 돌려보내는 주소. AndroidManifest 와 Supabase 대시보드 Redirect URL 에도 같은 값을 쓴다
 const val LOGIN_REDIRECT_SCHEME = "calmmap"
@@ -25,5 +26,7 @@ val supabase by lazy {
             host = LOGIN_REDIRECT_HOST
             // 로그인 정보는 기기에 저장돼서 앱을 다시 켜도 유지된다 (기본값)
         }
+        // 표 읽기 · 쓰기. 로그인한 상태면 그 사람 권한(RLS)으로 요청된다
+        install(Postgrest)
     }
 }

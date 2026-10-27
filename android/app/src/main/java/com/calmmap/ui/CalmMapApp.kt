@@ -1,15 +1,20 @@
 package com.calmmap.ui
 
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import com.calmmap.data.AuthRepository
+import com.calmmap.data.ProfileRepository
 import com.calmmap.ui.component.LoginRequiredSheet
 import com.calmmap.ui.component.MainTab
 import com.calmmap.ui.detail.NoDataScreen
@@ -27,8 +32,6 @@ import com.calmmap.ui.model.sampleDetailFor
 import com.calmmap.ui.model.sampleNoDataFor
 import com.calmmap.ui.mypage.AccountScreen
 import com.calmmap.ui.mypage.DataInfoScreen
-import com.calmmap.ui.mypage.ProfileEditScreen
-import com.calmmap.ui.mypage.sampleSensitivities
 import com.calmmap.ui.onboarding.ChildProfileScreen
 import com.calmmap.ui.onboarding.SensoryFactor
 import com.calmmap.ui.onboarding.Sensitivity
@@ -42,12 +45,13 @@ import com.calmmap.ui.visit.PlannedVisitsScreen
 import com.calmmap.ui.visit.VisitCardScreen
 import com.calmmap.ui.visit.VisitTimeScreen
 import java.time.LocalTime
+import kotlinx.coroutines.launch
 
 /** 지금 보여줄 화면 */
 private enum class Screen {
     MAP, SEARCH, DETAIL, HISTORY, ME, DATA_INFO,
     // 내 정보 안: 프로필 수정 · 우리 아이 수정 · 계정 관리
-    PROFILE_EDIT, CHILD_EDIT, ACCOUNT,
+    CHILD_EDIT, ACCOUNT,
     // 방문 계획 흐름
     //   계획할 때: 시간 선택 → 지도 (방문 예정 띠가 생김)
     //   갈 때: 방문 예정 띠 → 미리 보는 카드 → (아이와 보기) → 현장 모드 → 방문 후 기록
@@ -94,9 +98,27 @@ fun CalmMapApp(
     var plansFrom by remember { mutableStateOf(Screen.MAP) }
     // TODO: visits 테이블에 저장하면 지금은 앱을 끄면 사라진다
     val visits = remember { mutableStateListOf<VisitUi>().apply { addAll(sampleVisits) } }
-    // TODO: Supabase user_profiles 에 저장하면 지금은 앱을 끄면 처음 값으로 돌아간다
-    var nickname by remember { mutableStateOf("OO 보호자") }
-    var sensitivities by remember { mutableStateOf<Map<SensoryFactor, Sensitivity>>(sampleSensitivities) }
+    val scope = rememberCoroutineScope()
+    // 카카오 프로필 이름. 로그인이 바뀌면 다시 읽는다
+    val nickname = remember(isGuest) { AuthRepository.displayName() ?: "보호자" }
+    // 저장된 우리 아이 설정. null 이면 아직 못 읽은 것
+    var sensitivities by remember { mutableStateOf<Map<SensoryFactor, Sensitivity>?>(null) }
+    var savingChild by remember { mutableStateOf(false) }
+    // 설정을 읽다가 실패했는지. '불러오는 중' 대신 실패 안내를 띄운다
+    var childLoadFailed by remember { mutableStateOf(false) }
+    // 내 정보에 들어왔는데 아직 못 읽었으면 읽는다. 실패하면 다음에 들어올 때 다시 읽는다
+    LaunchedEffect(isGuest, screen == Screen.ME) {
+        if (isGuest || screen != Screen.ME || sensitivities != null) return@LaunchedEffect
+        childLoadFailed = false
+        sensitivities = try {
+            // 줄이 없으면 아무것도 고르지 않은 것과 같다
+            ProfileRepository.load() ?: emptyMap()
+        } catch (e: Exception) {
+            Log.e("CalmMap", "우리 아이 설정 불러오기 실패", e)
+            childLoadFailed = true
+            null
+        }
+    }
 
     fun startVisit(place: PlaceUi) {
         if (isGuest) {
@@ -163,7 +185,7 @@ fun CalmMapApp(
     // 이게 없으면 앱이 그냥 꺼져서 사용자가 보다 말고 튕긴 것처럼 느낀다
     BackHandler(enabled = screen != Screen.MAP) {
         screen = when (screen) {
-            Screen.DATA_INFO, Screen.PROFILE_EDIT, Screen.CHILD_EDIT, Screen.ACCOUNT -> Screen.ME
+            Screen.DATA_INFO, Screen.CHILD_EDIT, Screen.ACCOUNT -> Screen.ME
             Screen.VISIT_PLANS -> plansFrom
             Screen.VISIT_TIME -> visitFrom
             Screen.VISIT_CARD -> cardFrom
@@ -222,29 +244,32 @@ fun CalmMapApp(
                 isGuest = isGuest,
                 nickname = nickname,
                 sensitivities = sensitivities,
+                sensitivitiesFailed = childLoadFailed,
                 onLoginClick = onLoginClick,
-                onProfileEditClick = { screen = Screen.PROFILE_EDIT },
                 onChildEditClick = { screen = Screen.CHILD_EDIT },
                 onAccountClick = { screen = Screen.ACCOUNT },
             )
 
-            Screen.PROFILE_EDIT -> ProfileEditScreen(
-                nickname = nickname,
-                onBack = { screen = Screen.ME },
-                onSave = {
-                    nickname = it
-                    screen = Screen.ME
-                },
-            )
-
             Screen.CHILD_EDIT -> ChildProfileScreen(
-                initial = sensitivities,
+                initial = sensitivities.orEmpty(),
                 confirmText = "저장",
                 onBack = { screen = Screen.ME },
-                onStart = {
-                    sensitivities = it
-                    screen = Screen.ME
+                // 저장이 끝나야 내 정보로. 실패하면 이 화면에 남는다
+                onStart = { values ->
+                    scope.launch {
+                        savingChild = true
+                        try {
+                            ProfileRepository.save(values)
+                            sensitivities = values
+                            screen = Screen.ME
+                        } catch (e: Exception) {
+                            Log.e("CalmMap", "우리 아이 설정 저장 실패", e)
+                            Toast.makeText(context, "저장하지 못했어요. 다시 시도해 주세요", Toast.LENGTH_SHORT).show()
+                        }
+                        savingChild = false
+                    }
                 },
+                saving = savingChild,
             )
 
             Screen.ACCOUNT -> AccountScreen(
@@ -254,6 +279,7 @@ fun CalmMapApp(
                 onWithdraw = {
                     Toast.makeText(context, "회원 탈퇴는 아직 준비 중이에요", Toast.LENGTH_SHORT).show()
                 },
+                joinedAt = AuthRepository.joinedAt() ?: "-",
                 visitCount = visits.size,
             )
 
