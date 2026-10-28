@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import java.time.LocalTime
+import java.time.ZoneId
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -131,7 +132,7 @@ fun MapScreen(
     var selectedPlace by remember { mutableStateOf<PlaceUi?>(null) }
     var listOpen by remember { mutableStateOf(false) }
     var recenterKey by remember { mutableIntStateOf(0) }
-    val nowHour = remember { LocalTime.now().hour }
+    val nowHour = remember { LocalTime.now(ZoneId.of("Asia/Seoul")).hour }
 
     // 소리 · 빛 정보가 없는 장소는 카드를 거치지 않고 바로 상세로 보낸다.
     // 카드의 알맹이가 권고 시간대와 그래프인데 둘 다 없어서 빈 카드가 올라온다
@@ -485,11 +486,11 @@ private fun NaverMapHost(
 
     // 마커에 장소 이름이 들어가서 장소마다 한 장씩 만든다. 목록이 바뀔 때만 다시 만든다
     val icons = remember(places, density) {
-        places.associate { it.id to OverlayImage.fromBitmap(markerBitmap(it.level, it.name, density, typeface = markerFont)) }
+        places.associate { it.id to markerBitmap(it.level, it.name, density, typeface = markerFont) }
     }
     // 고른 장소는 진한 바탕으로 바꿔 어느 것을 눌렀는지 보이게 한다
     val selectedIcons = remember(places, density) {
-        places.associate { it.id to OverlayImage.fromBitmap(markerBitmap(it.level, it.name, density, selected = true, typeface = markerFont)) }
+        places.associate { it.id to markerBitmap(it.level, it.name, density, selected = true, typeface = markerFont) }
     }
 
     NaverMapView(
@@ -525,10 +526,18 @@ private fun NaverMapHost(
             markers += Marker().apply {
                 position = place.position
                 val isPicked = place.id == selectedPlace?.id || place.id == pressedId
-                icon = if (isPicked) selectedIcons.getValue(place.id) else icons.getValue(place.id)
-                // 알약 가운데가 장소 위치에 오게 한다 (기본은 아래 끝)
-                anchor = PointF(0.5f, 0.5f)
-                zIndex = if (isPicked) 1 else 0
+                val image = if (isPicked) selectedIcons.getValue(place.id) else icons.getValue(place.id)
+                icon = OverlayImage.fromBitmap(image.bitmap)
+                // 알약의 단계 점이 장소 위치에 오게 한다 (기본은 아래 끝 가운데)
+                anchor = PointF(image.anchorX, image.anchorY)
+                // 겹침 숨기기는 쓰지 않는다. 기본 화면에서 5곳이 다 보여야 한다.
+                // 위에 오는 순서: 고른 것 > 단계 > 후보 > 정보 부족
+                zIndex = when {
+                    isPicked -> 10
+                    place.level == SensoryLevel.NO_DATA -> 1
+                    place.level == SensoryLevel.CANDIDATE -> 2
+                    else -> 3
+                }
                 // 지도가 원래 그리는 글자(역 이름 · 거리 이름)와 겹치면 우리 마커를 우선한다
                 isHideCollidedSymbols = true
                 isForceShowIcon = true

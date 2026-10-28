@@ -36,6 +36,9 @@ import com.calmmap.ui.theme.TextTertiary
  * 점 모양은 component/LevelGlyph(Dot) 와 같은 규칙이다.
  * 장소마다 이름이 달라서 장소별로 한 장씩 만든다 (MapScreen 에서 remember).
  */
+/** 마커 그림과, 그림 안에서 단계 점이 있는 위치(0~1). 이 점이 장소 좌표에 오게 anchor 로 쓴다 */
+class MarkerImage(val bitmap: Bitmap, val anchorX: Float, val anchorY: Float)
+
 fun markerBitmap(
     level: SensoryLevel,
     name: String,
@@ -43,12 +46,10 @@ fun markerBitmap(
     selected: Boolean = false,
     // 앱 글꼴(Noto Sans KR). 못 읽으면 기본 굵은 글꼴
     typeface: Typeface = Typeface.DEFAULT_BOLD,
-): Bitmap = with(density) {
-    val label = when (level) {
-        SensoryLevel.CANDIDATE -> "$name · 후보"
-        SensoryLevel.NO_DATA -> "$name · 정보 부족"
-        else -> name
-    }
+): MarkerImage = with(density) {
+    // 상호 앞부분만 쓴다. "스타벅스 홍대역8번출구점" 처럼 길면 알약이 옆 마커를 덮는다.
+    // 단계는 글자가 아니라 점 모양으로 읽는다 (하단 범례). 전체 이름은 카드 · 상세에 나온다
+    val label = shortName(name)
     val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         this.typeface = typeface
         // 가변 글꼴이라 굵기를 따로 정한다
@@ -65,6 +66,7 @@ fun markerBitmap(
     val padL = 10.dp.toPx()
     val padR = 12.dp.toPx()
     val padV = (if (selected) 8 else 6).dp.toPx()
+    val ring = 1.5.dp.toPx()
     val textH = textPaint.fontMetrics.let { it.descent - it.ascent }
     val pillW = padL + dot + gap + textPaint.measureText(label) + padR
     val pillH = padV * 2 + maxOf(dot, textH)
@@ -92,10 +94,19 @@ fun markerBitmap(
         canvas.drawRoundRect(pill, r, r, stroke(BorderStrong, 1.dp.toPx()))
     }
 
-    // 단계 점
+    // 단계 점. 모든 마커가 똑같이 알약 왼쪽 끝
     val cx = pill.left + padL + dot / 2
     val cy = pill.centerY()
-    val ring = 1.5.dp.toPx()
+    drawLevelDot(canvas, level, cx, cy, dot, ring)
+
+    // 이름 (세로 가운데), 점 오른쪽
+    val baseline = cy - (textPaint.fontMetrics.ascent + textPaint.fontMetrics.descent) / 2
+    canvas.drawText(label, cx + dot / 2 + gap, baseline, textPaint)
+
+    MarkerImage(bitmap, cx / bitmap.width, cy / bitmap.height)
+}
+
+private fun drawLevelDot(canvas: Canvas, level: SensoryLevel, cx: Float, cy: Float, dot: Float, ring: Float) {
     when (level) {
         SensoryLevel.CALM -> {
             canvas.drawCircle(cx, cy, dot / 2, fill(LevelCalm))
@@ -109,16 +120,16 @@ fun markerBitmap(
         )
         SensoryLevel.NO_DATA -> canvas.drawCircle(cx, cy, dot / 2 - ring / 2, stroke(LevelNoData, ring))
     }
-
-    // 이름 (세로 가운데)
-    val baseline = cy - (textPaint.fontMetrics.ascent + textPaint.fontMetrics.descent) / 2
-    canvas.drawText(label, cx + dot / 2 + gap, baseline, textPaint)
-
-    bitmap
 }
 
 private fun fill(c: Color) = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = c.toArgb(); style = Paint.Style.FILL }
 
 private fun stroke(c: Color, w: Float) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     color = c.toArgb(); style = Paint.Style.STROKE; strokeWidth = w
+}
+
+/** 마커용 짧은 이름. 첫 띄어쓰기 앞까지, 그래도 7자를 넘으면 6자 + "…" */
+fun shortName(name: String): String {
+    val head = name.trim().substringBefore(' ')
+    return if (head.length <= 7) head else head.take(6) + "…"
 }

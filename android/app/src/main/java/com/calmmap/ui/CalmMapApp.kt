@@ -19,6 +19,7 @@ import com.calmmap.data.ProfileRepository
 import com.calmmap.ui.component.LoginRequiredSheet
 import com.calmmap.ui.component.MainTab
 import com.calmmap.ui.detail.NoDataScreen
+import com.calmmap.ui.theme.SensoryLevel
 import com.calmmap.ui.detail.PlaceDetailScreen
 import com.calmmap.ui.map.MapScreen
 import com.calmmap.ui.measure.MeasurePlaceScreen
@@ -46,6 +47,7 @@ import com.calmmap.ui.visit.PlannedVisitsScreen
 import com.calmmap.ui.visit.VisitCardScreen
 import com.calmmap.ui.visit.VisitTimeScreen
 import java.time.LocalTime
+import java.time.ZoneId
 import kotlinx.coroutines.launch
 
 /** 지금 보여줄 화면 */
@@ -82,7 +84,7 @@ fun CalmMapApp(
     var screen by remember { mutableStateOf(Screen.MAP) }
     // 상세로 들어갈 때 어느 장소인지 들고 간다
     var detailPlace by remember { mutableStateOf<PlaceUi?>(null) }
-    val nowHour = remember { LocalTime.now().hour }
+    val nowHour = remember { LocalTime.now(ZoneId.of("Asia/Seoul")).hour }
 
     // 방문 시간을 고를 장소
     var visitPlace by remember { mutableStateOf<PlaceUi?>(null) }
@@ -426,9 +428,9 @@ fun CalmMapApp(
                 when {
                     place == null -> screen = Screen.MAP
 
-                    // 소리 · 빛 측정이 없는 장소는 점수를 내지 않는 화면으로 보낸다.
-                    // 같은 상세로 보내면 탭이 통째로 비어서 고장 난 것처럼 보인다
-                    detail == null -> NoDataScreen(
+                    // 오늘 점수가 한 칸도 없는 장소(정보 부족)만 점수를 내지 않는 화면으로 보낸다.
+                    // 후보 · 단계가 있으면 예시 상세(detail)가 없어도 시간대별 탭은 그릴 수 있다
+                    place.level == SensoryLevel.NO_DATA -> NoDataScreen(
                         place = place,
                         info = noData,
                         onBack = { screen = Screen.MAP },

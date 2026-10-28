@@ -101,6 +101,7 @@ import com.calmmap.ui.theme.Shadows
 import com.calmmap.ui.theme.BorderStrong
 import kotlin.math.roundToInt
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -300,7 +301,7 @@ private fun RecommendationCard(recommendation: String, basis: String) {
 
 @Composable
 private fun HourlyCard(place: PlaceUi, nowHour: Int, selectedHour: Int?, onBarClick: (Int) -> Unit) {
-    val today = LocalDate.now()
+    val today = LocalDate.now(ZoneId.of("Asia/Seoul"))
     val week = today.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.KOREAN)
     val weekend = today.dayOfWeek.value >= 6
     DetailCard {
@@ -322,13 +323,13 @@ private fun HourlyCard(place: PlaceUi, nowHour: Int, selectedHour: Int?, onBarCl
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(BorderDefault))
         CardTitle(title = "주변 지역 혼잡", info = "서울시가 추정한 혼잡도예요. 매장 안 혼잡도와 다를 수 있어요.")
-        // TODO: hourly_forecast.area_crowd_level 을 붙이면 시간대별 실제 값으로 바꾼다
-        AreaCongestionChart(levels = sampleAreaCongestion, nowHour = nowHour)
+        // 오늘 줄이 있으면 실제 지역 혼잡, 없으면 예시 값
+        AreaCongestionChart(levels = place.areaCrowd.ifEmpty { sampleAreaCongestion }, nowHour = nowHour)
     }
 }
 
 // 8 ~ 22시 지역 혼잡 1 여유 · 2 보통 · 3 약간 붐빔 · 4 붐빔 (예시)
-private val sampleAreaCongestion = listOf(1, 1, 1, 2, 2, 3, 3, 2, 2, 3, 4, 4, 3, 2, 1)
+private val sampleAreaCongestion: List<Int?> = listOf(1, 1, 1, 2, 2, 3, 3, 2, 2, 3, 4, 4, 3, 2, 1)
 private val congestionWords = listOf("여유", "보통", "약간 붐빔", "붐빔")
 
 /**
@@ -340,7 +341,7 @@ private val congestionWords = listOf("여유", "보통", "약간 붐빔", "붐�
  *   - 누르거나 끌면 가장 가까운 시각으로 말풍선이 옮겨 간다 (막대 그래프와 같은 방식)
  */
 @Composable
-private fun AreaCongestionChart(levels: List<Int>, nowHour: Int) {
+private fun AreaCongestionChart(levels: List<Int?>, nowHour: Int) {
     val startHour = 8
     val nowIndex = (nowHour - startHour).coerceIn(0, levels.lastIndex)
     // 누른 칸. 없으면 지금 칸에 말풍선을 둔다
@@ -374,28 +375,29 @@ private fun AreaCongestionChart(levels: List<Int>, nowHour: Int) {
             ) {
                 val slot = size.width / levels.size
                 val baseY = size.height - 8.dp.toPx()
-                fun pt(i: Int) = Offset(slot * (i + 0.5f), yOf(levels[i]).toPx())
-
-                val line = Path().apply {
-                    moveTo(pt(0).x, pt(0).y)
-                    for (i in 1..levels.lastIndex) lineTo(pt(i).x, pt(i).y)
-                }
-                val area = Path().apply {
-                    addPath(line)
-                    lineTo(pt(levels.lastIndex).x, baseY)
-                    lineTo(pt(0).x, baseY)
-                    close()
-                }
+                fun pt(i: Int) = Offset(slot * (i + 0.5f), yOf(levels[i] ?: 1).toPx())
+                // 값이 있는 시각만 점을 찍고, 값이 이어지는 구간만 선으로 잇는다 (서울시 예측은 12시간 앞까지)
+                val known = levels.indices.filter { levels[it] != null }
                 drawLine(BorderDefault, Offset(0f, baseY), Offset(size.width, baseY), 1.dp.toPx())
-                drawPath(area, Brush.verticalGradient(listOf(BrandPrimary.copy(alpha = 0.22f), BrandPrimary.copy(alpha = 0.03f))))
-                drawPath(line, BrandPrimary, style = Stroke(1.8.dp.toPx(), cap = StrokeCap.Round))
+                if (known.isNotEmpty()) {
+                    val line = Path(); val area = Path()
+                    var open = false
+                    for (i in levels.indices) {
+                        if (levels[i] == null) { open = false; continue }
+                        if (!open) { line.moveTo(pt(i).x, pt(i).y); area.moveTo(pt(i).x, baseY); area.lineTo(pt(i).x, pt(i).y); open = true }
+                        else { line.lineTo(pt(i).x, pt(i).y); area.lineTo(pt(i).x, pt(i).y) }
+                        if (i == levels.lastIndex || levels[i + 1] == null) { area.lineTo(pt(i).x, baseY); area.close() }
+                    }
+                    drawPath(area, Brush.verticalGradient(listOf(BrandPrimary.copy(alpha = 0.22f), BrandPrimary.copy(alpha = 0.03f))))
+                    drawPath(line, BrandPrimary, style = Stroke(1.8.dp.toPx(), cap = StrokeCap.Round))
+                }
 
-                // 보이는 점에서 바닥선까지 점선
-                drawLine(
+                // 보이는 점에서 바닥선까지 점선 (값이 있을 때만)
+                if (levels[shown] != null) drawLine(
                     BrandPrimary, Offset(pt(shown).x, pt(shown).y), Offset(pt(shown).x, baseY),
                     strokeWidth = 1.2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)),
                 )
-                levels.indices.forEach { i ->
+                known.forEach { i ->
                     val p = pt(i)
                     when {
                         i == nowIndex -> {
@@ -425,12 +427,12 @@ private fun AreaCongestionChart(levels: List<Int>, nowHour: Int) {
                 }
             }
         }
-        PointTip(
+        if (levels[shown] != null) PointTip(
             hour = startHour + shown,
-            word = congestionWords[(levels[shown] - 1).coerceIn(0, 3)],
+            word = congestionWords[((levels[shown] ?: 1) - 1).coerceIn(0, 3)],
             index = shown,
             slotCount = levels.size,
-            pointTop = tipRoom + yOf(levels[shown]),
+            pointTop = tipRoom + yOf(levels[shown] ?: 1),
             modifier = Modifier.zIndex(1f),
         )
     }

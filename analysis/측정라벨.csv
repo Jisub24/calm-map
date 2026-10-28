@@ -1,0 +1,40 @@
+measurement_no,yamnet_label,ratio,avg_confidence
+1,Speech,0.8984,0.564
+1,Music,0.0306,0.012
+1,Vehicle,0.0177,0.01
+1,"Heart sounds, heartbeat",0.0113,0.008
+1,Rail transport,0.0065,0.008
+2,Music,0.6466,0.364
+2,Vehicle,0.1552,0.055
+2,Speech,0.1379,0.086
+2,Bus,0.0259,0.022
+2,Aircraft,0.0086,0.01
+2,"Outside, urban or manmade",0.0086,0.013
+2,Police car (siren),0.0086,0.007
+3,Music,0.4432,0.224
+3,Speech,0.4108,0.198
+3,Vehicle,0.0486,0.018
+3,Animal,0.0216,0.02
+3,Bus,0.0216,0.016
+4,Speech,0.9235,0.677
+4,Music,0.0205,0.011
+4,"Heart sounds, heartbeat",0.0205,0.012
+4,Vehicle,0.0131,0.011
+5,Speech,0.9811,0.752
+5,Music,0.0094,0.015
+5,"Dishes, pots, and pans",0.0031,0.006
+6,Speech,0.9593,0.716
+6,Music,0.0287,0.025
+6,"Dishes, pots, and pans",0.0024,0.003
+7,Speech,0.9155,0.577
+7,Music,0.0676,0.031
+7,"Dishes, pots, and pans",0.0048,0.006
+8,Speech,0.9014,0.548
+8,Music,0.0634,0.029
+8,Tambourine,0.0141,0.005
+9,Speech,0.9372,0.631
+9,Music,0.0524,0.027
+9,Choir,0.0105,0.003
+10,Speech,0.9759,0.726
+10,Music,0.0181,0.012
+10,Dog,0.006,0.007
