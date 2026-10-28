@@ -151,13 +151,16 @@ def median_scores(scored):
     return out
 
 
-def judge(n, total_sec, total, s):
+def judge(n, total_sec, total, s, demo=False):
     """상태 · 단계 · 점선 여부.
 
     무던함은 확인된 때만, 부담 높음은 추정이어도 — 이 비대칭이 답변서 핵심.
+    demo(시연 장소)는 측정이 적어도 1건부터 단계로 둔다 (settings.demo_places, 022).
     """
     if total is None:
         return "insufficient", None, False
+    if demo:
+        return "level", level_of(total, s), False
     if n >= s["min_measurements"]:
         lv = level_of(total, s)
         if lv == CALM and total_sec < s["calm_min_total_sec"]:
@@ -215,7 +218,9 @@ def build_rows(target_date, places, hours_by_place, measurements, congestion, s)
     for p in places:
         pid, area = p["id"], p["congestion_area_cd"]
         hours = open_hours(hours_by_place.get((pid, weekday)))
-        mine = [r for r in scored if r["place_id"] == pid and r["group"] == group]
+        # 시연 장소는 평일 · 주말을 가리지 않고 모든 측정을 쓴다 (022)
+        demo = pid in set(s.get("demo_places", []))
+        mine = [r for r in scored if r["place_id"] == pid and (demo or r["group"] == group)]
         by_hour = defaultdict(list)
         for r in mine:
             by_hour[r["hour"]].append(r)
@@ -241,10 +246,13 @@ def build_rows(target_date, places, hours_by_place, measurements, congestion, s)
             got = by_hour.get(h)
             if got:
                 agg = median_scores(got)
-                status, level, est = judge(len(got), sum(r["duration_sec"] for r in got), agg["total_score"], s)
+                status, level, est = judge(len(got), sum(r["duration_sec"] for r in got), agg["total_score"], s, demo)
                 row.update(agg)
                 row.update({"measurement_count": len(got),
                             "last_measured_at": max(r["measured_at"] for r in got).isoformat()})
+            elif demo:
+                # 시연 장소: 측정한 시각만 단계, 나머지 시각은 지어내지 않고 정보 부족 (022)
+                status, level, est = "insufficient", None, False
             else:
                 agg = interpolate(points, area_level)
                 if agg:

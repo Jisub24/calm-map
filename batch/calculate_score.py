@@ -253,6 +253,7 @@ def rows_from_sheet(path):
                 "duration_sec": int(r["duration_sec"]),
                 "device_model": r.get("device_model", "iPhone 15"),
                 "avg_db": _num(r["leq_db"]),
+                "background_db": _num(r["la90_db"]),
                 "sudden_count": int(r["sudden_count"]),
                 "sudden_strong_count": int(r["sudden_strong_count"]),
                 "alert_count": int(r["alert_count"]),

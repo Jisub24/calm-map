@@ -3,7 +3,7 @@
 # cron 은 UTC 기준이다. 한국 시각은 +9시간.
 # 우리는 "몇 시에"가 아니라 "몇 분마다"만 쓰므로 시간대와 무관하다.
 #   "17,37,57 * * * *"   매시 17 / 37 / 57 분 (혼잡도 수집)
-#   "*/15 * * * *"       15분마다 (점수 계산 · 예측, 아직 안 씀)
+#   예측(forecast)은 혼잡도 수집과 같은 예약에 묶어 그 뒤에 돈다
 #
 # 예약은 정확한 시각을 보장하지 않는다. 부하가 몰리면 뒤로 밀리고 심하면 건너뛴다.
 # 실제로 "0 * * * *"(매시 정각)으로 걸었더니 35시간 동안 7번만 돌았다 (이슈 #13).
@@ -76,3 +76,28 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python collect_commercial.py
+
+  # 시간대별 예측. 혼잡도 수집이 끝난 뒤 돌아야 지역 혼잡 예측이 최신이다 (needs).
+  # 측정(measurements)을 점수로 바꿔 장소 × 오늘 × 시각 칸(hourly_forecast)을 다시 쓴다.
+  # 앱의 마커 · 그래프 · 결론 문구가 전부 이 표를 읽는다.
+  forecast:
+    name: 시간대별 예측
+    needs: collect-congestion
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 라이브러리 설치
+        run: pip install -r batch/requirements.txt
+
+      - name: 실행
+        working-directory: batch
+        env:
+          SEOUL_API_KEY: ${{ secrets.SEOUL_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python forecast.py
