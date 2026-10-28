@@ -7,6 +7,7 @@ import android.graphics.PointF
 import com.calmmap.ui.component.CalmIcon
 import com.calmmap.ui.component.CalmIcons
 import android.os.Bundle
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -50,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import androidx.lifecycle.Lifecycle
@@ -78,6 +80,7 @@ import com.calmmap.ui.component.SearchBar
 import com.calmmap.ui.component.outlineBorder
 import com.calmmap.ui.component.pressFade
 import com.calmmap.ui.model.PlaceUi
+import com.calmmap.ui.model.TimeSlot
 import com.calmmap.ui.model.VisitPlan
 import com.calmmap.ui.model.samplePlaces
 import com.calmmap.ui.theme.TextPrimary
@@ -105,6 +108,8 @@ private val SheetPeek = 88.dp
  * 지도가 화면을 꽉 채우고, 그 위에 검색창 · 칩 · 방문 예정 띠 · 측정 · 내 위치 버튼 · 아래 시트가 뜬다.
  *   아래 시트(접힘)  '지금 무던한 곳 N' + 범례. '전체 보기' 를 누르면 목록이 펼쳐진다
  *   장소를 누르면    시트가 장소 카드(07)로 바뀌고 칩 · 띠는 접힌다
+ *   '시간 선택' 칩    시트가 시간 선택으로 바뀐다. 평일 · 주말과 시각을 고르면 마커 · 목록 · 카드가 그 시각 기준이 된다.
+ *                    '지금' 칩을 누르면 다시 지금 기준
  *
  * 장소는 아직 임시 데이터다. 답사에서 가게를 정하면 DB 에서 읽어온다.
  */
@@ -126,6 +131,9 @@ fun MapScreen(
     onOtherVisitsClick: () -> Unit = {},
     /** 지도의 '측정' 버튼. 장소 고르기 → 측정 중 */
     onMeasureClick: () -> Unit = {},
+    /** 시간 선택에서 고른 때. null 이면 지금. [places] 는 이미 이 때 기준으로 만든 것이다 */
+    slot: TimeSlot? = null,
+    onSlotChange: (TimeSlot?) -> Unit = {},
 ) {
     var personalized by remember { mutableStateOf(false) }
     // 장소를 고르면 아래 시트가 그 장소 카드로 바뀐다
@@ -133,11 +141,17 @@ fun MapScreen(
     var listOpen by remember { mutableStateOf(false) }
     var recenterKey by remember { mutableIntStateOf(0) }
     val nowHour = remember { LocalTime.now(ZoneId.of("Asia/Seoul")).hour }
+    val todayWeekend = remember { LocalDate.now(ZoneId.of("Asia/Seoul")).dayOfWeek.value >= 6 }
+    // 시간 선택 시트가 떠 있는지. 뒤로 가기를 누르면 앱이 아니라 시트가 닫힌다
+    var timeOpen by remember { mutableStateOf(false) }
+    BackHandler(enabled = timeOpen) { timeOpen = false }
 
-    // 소리 · 빛 정보가 없는 장소는 카드를 거치지 않고 바로 상세로 보낸다.
-    // 카드의 알맹이가 권고 시간대와 그래프인데 둘 다 없어서 빈 카드가 올라온다
+    // 그 날 점수가 한 칸도 없는 장소는 카드를 거치지 않고 바로 상세로 보낸다.
+    // 카드의 알맹이가 권고 시간대와 그래프인데 둘 다 없어서 빈 카드가 올라온다.
+    // 고른 시각만 비어 있는 장소는 카드를 연다. 그 날 다른 시각을 그래프로 볼 수 있다
     fun pick(place: PlaceUi) {
-        if (place.level == SensoryLevel.NO_DATA) onPlaceClick(place)
+        timeOpen = false
+        if (!place.hasForecast) onPlaceClick(place)
         else selectedPlace = place
     }
 
@@ -154,6 +168,7 @@ fun MapScreen(
                 onMapClick = {
                     selectedPlace = null
                     listOpen = false
+                    timeOpen = false
                 },
                 recenterKey = recenterKey,
                 bottomInset = SheetPeek,
@@ -177,9 +192,24 @@ fun MapScreen(
                 SearchBar(onClick = onSearchClick)
                 if (selectedPlace == null) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(label = "지금", selected = true, onClick = {})
-                        // TODO: 시간 선택 시트를 붙인다
-                        FilterChip(label = "시간 선택", selected = false, onClick = {}, trailingIcon = CalmIcons.ChevronDown)
+                        FilterChip(
+                            label = "지금",
+                            selected = slot == null,
+                            onClick = {
+                                onSlotChange(null)
+                                timeOpen = false
+                            },
+                        )
+                        // 고른 뒤에는 칩에 고른 때를 적는다. "주말 15시"
+                        FilterChip(
+                            label = slot?.label ?: "시간 선택",
+                            selected = slot != null,
+                            onClick = {
+                                listOpen = false
+                                timeOpen = true
+                            },
+                            trailingIcon = CalmIcons.ChevronDown,
+                        )
                         FilterChip(
                             label = "우리 아이 맞춤",
                             selected = personalized,
@@ -201,7 +231,14 @@ fun MapScreen(
 
             val picked = selectedPlace
             Column(modifier = Modifier.align(Alignment.BottomCenter)) {
-                if (picked == null) {
+                if (picked == null && timeOpen) {
+                    TimeSlotSheet(
+                        initial = slot ?: TimeSlot(weekend = todayWeekend, hour = nowHour.coerceIn(8, 22)),
+                        todayWeekend = todayWeekend,
+                        onChange = onSlotChange,
+                        onClose = { timeOpen = false },
+                    )
+                } else if (picked == null) {
                     // 오른쪽 아래: 측정 · 내 위치. 둘 다 지도 위에 뜨는 흰 버튼
                     Row(
                         modifier = Modifier
@@ -214,6 +251,7 @@ fun MapScreen(
                         LocateButton(onClick = { recenterKey++ })
                     }
                     NearbySheet(
+                        whenLabel = slot?.label ?: "지금",
                         places = calmNow,
                         otherCount = places.size - calmNow.size,
                         open = listOpen,
@@ -336,10 +374,12 @@ private fun LocateButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 
 /**
  * 아래 시트 (최종안 06). 접히면 '지금 무던한 곳 N · 그 밖의 장소 M' 과 범례만,
- * '전체 보기' 를 누르면 가까운 순 목록이 펼쳐진다.
+ * '전체 보기' 를 누르면 가까운 순 목록이 펼쳐진다. 시간을 골랐으면 '주말 15시 무던한 곳 N'.
  */
 @Composable
 private fun NearbySheet(
+    /** "지금" 또는 고른 때 "주말 15시" */
+    whenLabel: String,
     places: List<PlaceUi>,
     otherCount: Int,
     open: Boolean,
@@ -366,12 +406,14 @@ private fun NearbySheet(
                 .padding(top = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(text = "지금 무던한 곳 ", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
+            Text(text = "$whenLabel 무던한 곳 ", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
             Text(text = "${places.size}", style = MaterialTheme.typography.titleLarge, color = BrandPrimary)
             Text(
                 text = " · 그 밖의 장소 $otherCount",
                 style = MaterialTheme.typography.caption,
                 color = TextTertiary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             // 글자 대신 화살표. 손잡이 바와 같은 뜻이라 "전체 보기 · 접기" 글자 없이도 읽힌다.

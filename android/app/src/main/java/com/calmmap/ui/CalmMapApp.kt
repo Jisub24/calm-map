@@ -8,18 +8,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import com.calmmap.data.AuthRepository
+import com.calmmap.data.MeasurementRepository
+import com.calmmap.data.PlaceDetailRepository
 import com.calmmap.data.PlaceRepository
 import com.calmmap.data.ProfileRepository
 import com.calmmap.ui.component.LoginRequiredSheet
 import com.calmmap.ui.component.MainTab
 import com.calmmap.ui.detail.NoDataScreen
-import com.calmmap.ui.theme.SensoryLevel
 import com.calmmap.ui.detail.PlaceDetailScreen
 import com.calmmap.ui.map.MapScreen
 import com.calmmap.ui.measure.MeasurePlaceScreen
@@ -27,10 +29,11 @@ import com.calmmap.ui.measure.MeasureResultScreen
 import com.calmmap.ui.measure.MeasuringScreen
 import com.calmmap.ui.model.MeasureResult
 import com.calmmap.ui.model.PlaceUi
+import com.calmmap.ui.model.TimeSlot
 import com.calmmap.ui.model.VisitPlan
 import com.calmmap.ui.model.VisitUi
 import com.calmmap.ui.model.sampleVisits
-import com.calmmap.ui.model.sampleDetailFor
+import com.calmmap.ui.model.PlaceDetailUi
 import com.calmmap.ui.model.sampleNoDataFor
 import com.calmmap.ui.mypage.AccountScreen
 import com.calmmap.ui.mypage.DataInfoScreen
@@ -46,8 +49,10 @@ import com.calmmap.ui.visit.OnSiteScreen
 import com.calmmap.ui.visit.PlannedVisitsScreen
 import com.calmmap.ui.visit.VisitCardScreen
 import com.calmmap.ui.visit.VisitTimeScreen
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /** 지금 보여줄 화면 */
@@ -84,7 +89,21 @@ fun CalmMapApp(
     var screen by remember { mutableStateOf(Screen.MAP) }
     // 상세로 들어갈 때 어느 장소인지 들고 간다
     var detailPlace by remember { mutableStateOf<PlaceUi?>(null) }
-    val nowHour = remember { LocalTime.now(ZoneId.of("Asia/Seoul")).hour }
+    // 지도 장소를 새로 읽을 때 같이 고친다. 앱을 켜 둔 채 시간이 지나도 '지금' 이 맞게
+    var nowHour by remember { mutableIntStateOf(LocalTime.now(ZoneId.of("Asia/Seoul")).hour) }
+    // 상세 탭(점수 · 소리 · 빛 · 사업장) 값. 장소를 고를 때마다 DB 에서 새로 읽는다
+    var detail by remember { mutableStateOf<PlaceDetailUi?>(null) }
+    // 상세 화면에 들어올 때마다 새로 읽는다. 장소가 바뀔 때만 읽으면, 같은 장소를 다시 열었을 때 예전 값이 남는다.
+    // 지도에서 시간을 골랐으면 그 날 · 그 시각 기준으로 읽는다
+    LaunchedEffect(detailPlace?.id, screen == Screen.DETAIL) {
+        if (screen != Screen.DETAIL) return@LaunchedEffect
+        detail = null
+        val place = detailPlace ?: return@LaunchedEffect
+        val day = place.date ?: LocalDate.now(ZoneId.of("Asia/Seoul"))
+        detail = runCatching { PlaceDetailRepository.load(place, place.slot?.hour ?: nowHour, day) }
+            .onFailure { Log.w("CalmMapApp", "장소 상세 불러오기 실패", it) }
+            .getOrNull()
+    }
 
     // 방문 시간을 고를 장소
     var visitPlace by remember { mutableStateOf<PlaceUi?>(null) }
@@ -108,17 +127,25 @@ fun CalmMapApp(
     var sensitivities by remember { mutableStateOf<Map<SensoryFactor, Sensitivity>?>(null) }
     var savingChild by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    // 지도 · 검색 · 측정 장소 고르기가 같이 쓰는 장소 목록. null 이면 아직 못 읽은 것
-    var places by remember { mutableStateOf<List<PlaceUi>?>(null) }
-    // 지도로 올 때 아직 못 읽었으면 읽는다. 실패하면 다음에 지도로 올 때 다시 읽는다
+    // DB 에서 읽은 장소들. null 이면 아직 못 읽은 것
+    var mapPlaces by remember { mutableStateOf<PlaceRepository.MapPlaces?>(null) }
+    // 검색 · 측정 장소 고르기가 쓰는 지금 기준 목록
+    val places = mapPlaces?.now
+    // 지도 시간 선택에서 고른 때. null 이면 지금. 상세에 다녀와도 그대로 둔다
+    var mapSlot by remember { mutableStateOf<TimeSlot?>(null) }
+    // 지도로 올 때마다 새로 읽는다. 앱을 켜 둔 채 시간이 지나거나 batch 가 점수를 새로 써도 옛 값이 남지 않게.
+    // 읽는 동안은 이전 목록을 그대로 보여주고, 실패하면 이전 목록을 둔다. 보여줄 것이 없을 때만 알린다
     LaunchedEffect(screen == Screen.MAP) {
-        if (screen != Screen.MAP || places != null) return@LaunchedEffect
-        places = try {
-            PlaceRepository.loadAll()
+        if (screen != Screen.MAP) return@LaunchedEffect
+        try {
+            mapPlaces = PlaceRepository.loadAll()
+            nowHour = LocalTime.now(ZoneId.of("Asia/Seoul")).hour
+        } catch (e: CancellationException) {
+            // 읽는 도중 지도를 떠난 것. 실패가 아니다
+            throw e
         } catch (e: Exception) {
             Log.e("CalmMap", "장소 불러오기 실패", e)
-            Toast.makeText(context, "장소를 불러오지 못했어요", Toast.LENGTH_SHORT).show()
-            null
+            if (mapPlaces == null) Toast.makeText(context, "장소를 불러오지 못했어요", Toast.LENGTH_SHORT).show()
         }
     }
     // 설정을 읽다가 실패했는지. '불러오는 중' 대신 실패 안내를 띄운다
@@ -217,7 +244,9 @@ fun CalmMapApp(
     Box {
         when (screen) {
             Screen.MAP -> MapScreen(
-                places = places.orEmpty(),
+                places = mapPlaces?.at(mapSlot).orEmpty(),
+                slot = mapSlot,
+                onSlotChange = { mapSlot = it },
                 onSearchClick = { screen = Screen.SEARCH },
                 onPlaceClick = { openDetail(it) },
                 onTabSelect = { selectTab(it) },
@@ -406,8 +435,9 @@ fun CalmMapApp(
                 } else {
                     MeasureResultScreen(
                         result = result,
-                        // TODO: measurements 테이블에 저장
-                        onSave = {
+                        // DB 에 들어간 뒤에야 화면을 나간다. 실패하면 결과 화면이 알리고 그대로 남는다
+                        onSave = { saved ->
+                            MeasurementRepository.save(saved)
                             Toast.makeText(context, "측정을 저장했어요", Toast.LENGTH_SHORT).show()
                             measureResult = null
                             screen = measureFrom
@@ -422,15 +452,14 @@ fun CalmMapApp(
 
             Screen.DETAIL -> {
                 val place = detailPlace
-                val detail = place?.let { sampleDetailFor(it.id) }
                 val noData = place?.let { sampleNoDataFor(it.id) }
 
                 when {
                     place == null -> screen = Screen.MAP
 
-                    // 오늘 점수가 한 칸도 없는 장소(정보 부족)만 점수를 내지 않는 화면으로 보낸다.
-                    // 후보 · 단계가 있으면 예시 상세(detail)가 없어도 시간대별 탭은 그릴 수 있다
-                    place.level == SensoryLevel.NO_DATA -> NoDataScreen(
+                    // 그 날 점수가 한 칸도 없는 장소만 점수를 내지 않는 화면으로 보낸다.
+                    // 고른 시각만 비어 있으면 상세를 연다. 그 날 다른 시각을 시간대별 탭에서 볼 수 있다
+                    !place.hasForecast -> NoDataScreen(
                         place = place,
                         info = noData,
                         onBack = { screen = Screen.MAP },

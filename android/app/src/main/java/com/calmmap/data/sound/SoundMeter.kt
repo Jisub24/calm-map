@@ -25,6 +25,8 @@ data class SoundReading(
     val db: Int,
     /** YAMNet 원본 라벨별 점수 0~1 */
     val labelScores: Map<String, Float>,
+    /** 이 1초 안에서 0.1초 단위로 가장 컸던 크기. 짧은 소리(그릇 부딪힘)가 1초 평균에 묻히지 않게 따로 본다 */
+    val peakDb: Int,
 )
 
 /**
@@ -82,6 +84,7 @@ class SoundMeter(private val context: Context) {
                     SoundReading(
                         db = relativeDb(buffer),
                         labelScores = categories.associate { it.categoryName() to it.score() },
+                        peakDb = peakDb(buffer),
                     ),
                 )
             }
@@ -99,6 +102,18 @@ class SoundMeter(private val context: Context) {
         val rms = sqrt(samples.sumOf { (it * it).toDouble() } / samples.size)
         val dbfs = 20 * log10(rms.coerceAtLeast(1e-6))
         return (dbfs + DB_OFFSET).toInt().coerceIn(0, 120)
+    }
+
+    // 0.1초 조각마다 relativeDb 를 내고 가장 큰 값. analysis/sound_analysis.py 의 peak_db 와 같다
+    private fun peakDb(samples: FloatArray): Int {
+        val window = SAMPLE_RATE / 10
+        var best = 0
+        var start = 0
+        while (start + window <= samples.size) {
+            best = maxOf(best, relativeDb(samples.copyOfRange(start, start + window)))
+            start += window
+        }
+        return best
     }
 
     private companion object {

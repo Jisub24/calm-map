@@ -121,7 +121,9 @@ fun PlaceSheet(
         if (place.hours.isNotEmpty()) {
             HourlyBarChart(
                 bars = place.hours,
-                nowHour = nowHour,
+                // 지도에서 시간을 골랐으면 축에 그 시각을 '선택' 으로 표시한다
+                nowHour = place.slot?.hour ?: nowHour,
+                nowLabel = if (place.slot == null) "지금" else "선택",
                 compact = true,
                 selectedHour = selectedHour,
                 // 같은 막대를 다시 누르면 말풍선을 닫는다
@@ -133,7 +135,7 @@ fun PlaceSheet(
             if (picked != null) {
                 SelectedHourNote(bar = picked, modifier = Modifier.padding(top = 8.dp))
             } else {
-                ChartLegend(modifier = Modifier.padding(top = 8.dp))
+                ChartLegend(modifier = Modifier.padding(top = 8.dp), bars = place.hours)
             }
         }
 

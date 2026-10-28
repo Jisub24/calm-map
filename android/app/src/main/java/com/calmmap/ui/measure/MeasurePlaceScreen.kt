@@ -25,7 +25,6 @@ import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.model.ENOUGH_MEASURES
 import com.calmmap.ui.model.MEASURE_SECONDS
 import com.calmmap.ui.model.PlaceUi
-import com.calmmap.ui.model.sampleMeasureCount
 import com.calmmap.ui.model.samplePlaces
 import com.calmmap.ui.theme.BgCanvas
 import com.calmmap.ui.theme.BgSurface
@@ -74,7 +73,7 @@ fun MeasurePlaceScreen(
                     .padding(horizontal = 16.dp, vertical = 4.dp),
             ) {
                 sorted.forEachIndexed { i, place ->
-                    val count = sampleMeasureCount(place.id)
+                    val count = place.measureCount
                     // 측정이 모자란 곳은 한 번 더 재면 도움이 된다는 걸 알린다
                     val need = if (count < ENOUGH_MEASURES) " · 부족" else ""
                     PlaceRow(
