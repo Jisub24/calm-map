@@ -29,6 +29,8 @@ data class PlaceUi(
     val hours: List<HourBar> = emptyList(),
     /** 사업장 웹에서 등록한 무던한 시간. 없으면 null. 점수에는 넣지 않는다 */
     val businessNote: String? = null,
+    /** 오늘 8~22시 주변 지역 혼잡 1(여유)~4(붐빔). 서울시 예측이 없는 시각은 null. 비어 있으면 예시 값으로 그린다 */
+    val areaCrowd: List<Int?> = emptyList(),
 ) {
     /** 카드 · 상세 제목 아래 한 줄. "카페 · 도보 6분 · 영업 중". 모르는 것은 뺀다 */
     val infoLine: String
