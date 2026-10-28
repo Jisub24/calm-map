@@ -79,10 +79,12 @@ object MeasurementRepository {
             announce_level = result.announceLevel?.dbValue,
             crowd_level = result.crowd?.dbValue,
         )
-        val id = supabase.from("measurements")
-            .insert(row) { select(Columns.list("id")) }
-            .decodeSingle<IdRow>()
-            .id
+        val id = withFreshSession {
+            supabase.from("measurements")
+                .insert(row) { select(Columns.list("id")) }
+                .decodeSingle<IdRow>()
+                .id
+        }
 
         // 0 이면 "한 번도 안 들렸다"는 뜻이라 줄을 보내지 않는다 (007 규칙)
         val labels = result.labelStats
@@ -95,7 +97,7 @@ object MeasurementRepository {
                     avg_confidence = stat.avgConfidence.coerceAtMost(1f),
                 )
             }
-        if (labels.isNotEmpty()) supabase.from("measurement_labels").insert(labels)
+        if (labels.isNotEmpty()) withFreshSession { supabase.from("measurement_labels").insert(labels) }
         return id
     }
 }

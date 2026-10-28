@@ -96,7 +96,10 @@ object PlaceDetailRepository {
      * [day] 의 [hour] 시 기준으로 읽는다. 지도에서 시간을 고르지 않았으면 오늘 · 지금 시각,
      * 골랐으면 그 날(PlaceUi.date) · 그 시각이다
      */
-    suspend fun load(place: PlaceUi, hour: Int, day: LocalDate = LocalDate.now(SEOUL)): PlaceDetailUi = coroutineScope {
+    suspend fun load(place: PlaceUi, hour: Int, day: LocalDate = LocalDate.now(SEOUL)): PlaceDetailUi =
+        withFreshSession { read(place, hour, day) }
+
+    private suspend fun read(place: PlaceUi, hour: Int, day: LocalDate): PlaceDetailUi = coroutineScope {
         val today = day.toString()
 
         val forecast = async {
@@ -128,7 +131,7 @@ object PlaceDetailRepository {
                 supabase.from("place_sound_summary")
                     .select(Columns.list("sound_type", "ratio", "measurement_count")) { filter { eq("place_id", place.id) } }
                     .decodeList<SoundSummaryRow>()
-            }.onFailure { Log.w(TAG, "장소 상세 일부 읽기 실패", it) }.getOrElse { emptyList() }
+            }.onFailure { Log.w(TAG, "장소 상세 일부 읽기 실패: ${it.brief()}") }.getOrElse { emptyList() }
         }
         val measure = async {
             runCatching {
@@ -137,7 +140,7 @@ object PlaceDetailRepository {
                         Columns.list("measurement_count", "db_median", "lux_median", "lux_count", "sudden_per_hour", "announce_per_hour", "crowd_median"),
                     ) { filter { eq("place_id", place.id) } }
                     .decodeSingleOrNull<MeasureSummaryRow>()
-            }.onFailure { Log.w(TAG, "장소 상세 일부 읽기 실패", it) }.getOrNull()
+            }.onFailure { Log.w(TAG, "장소 상세 일부 읽기 실패: ${it.brief()}") }.getOrNull()
         }
 
         // 지역 이름 · 상권은 장소의 지역 코드를 알아야 읽을 수 있다
@@ -147,7 +150,7 @@ object PlaceDetailRepository {
                 supabase.from("congestion_areas")
                     .select(Columns.list("area_cd", "area_nm")) { filter { eq("area_cd", areaCd) } }
                     .decodeSingleOrNull<AreaRow>()
-            }.onFailure { Log.w(TAG, "장소 상세 일부 읽기 실패", it) }.getOrNull()
+            }.onFailure { Log.w(TAG, "장소 상세 일부 읽기 실패: ${it.brief()}") }.getOrNull()
         }
         val commercial = async {
             runCatching {
@@ -158,14 +161,14 @@ object PlaceDetailRepository {
                         limit(1)
                     }
                     .decodeSingleOrNull<CommercialRow>()
-            }.onFailure { Log.w(TAG, "장소 상세 일부 읽기 실패", it) }.getOrNull()
+            }.onFailure { Log.w(TAG, "장소 상세 일부 읽기 실패: ${it.brief()}") }.getOrNull()
         }
         val commercialRow = commercial.await()
         val categories = if (commercialRow == null) emptyList() else runCatching {
             supabase.from("commercial_categories")
                 .select(Columns.list("mid_ctgr", "level", "level_text")) { filter { eq("commercial_id", commercialRow.id) } }
                 .decodeList<CommercialCategoryRow>()
-        }.onFailure { Log.w(TAG, "장소 상세 일부 읽기 실패", it) }.getOrElse { emptyList() }
+        }.onFailure { Log.w(TAG, "장소 상세 일부 읽기 실패: ${it.brief()}") }.getOrElse { emptyList() }
 
         val rows = forecast.await()
         val m = measure.await()

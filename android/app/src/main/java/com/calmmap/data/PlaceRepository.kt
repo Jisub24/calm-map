@@ -89,8 +89,10 @@ object PlaceRepository {
         fun at(slot: TimeSlot?): List<PlaceUi> = if (slot == null) now else made.getOrPut(slot) { make(slot) }
     }
 
-    /** 모든 장소를 지도용으로 읽는다 */
-    suspend fun loadAll(now: ZonedDateTime = ZonedDateTime.now(SEOUL)): MapPlaces = coroutineScope {
+    /** 모든 장소를 지도용으로 읽는다. 로그인 토큰이 만료됐으면 새로 받고 읽는다 */
+    suspend fun loadAll(now: ZonedDateTime = ZonedDateTime.now(SEOUL)): MapPlaces = withFreshSession { read(now) }
+
+    private suspend fun read(now: ZonedDateTime): MapPlaces = coroutineScope {
         val today = now.toLocalDate()
         val otherDay = otherGroupDay(today)
         // 세 표를 동시에 읽는다

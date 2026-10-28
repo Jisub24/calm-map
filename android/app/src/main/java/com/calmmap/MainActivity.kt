@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.calmmap.data.AuthRepository
 import com.calmmap.data.ProfileRepository
+import com.calmmap.data.brief
 import com.calmmap.data.isOnline
 import com.calmmap.data.supabase
 import com.calmmap.ui.onboarding.ChildProfileScreen
@@ -82,7 +83,7 @@ class MainActivity : ComponentActivity() {
                     hasProfile = try {
                         ProfileRepository.load() != null
                     } catch (e: Exception) {
-                        Log.e("CalmMap", "우리 아이 설정 확인 실패", e)
+                        Log.e("CalmMap", "우리 아이 설정 확인 실패: ${e.brief()}")
                         true
                     }
                     return hasProfile
@@ -161,7 +162,7 @@ class MainActivity : ComponentActivity() {
                                     try {
                                         AuthRepository.signInWithKakao()
                                     } catch (e: Exception) {
-                                        Log.e("CalmMap", "카카오 로그인 실패", e)
+                                        Log.e("CalmMap", "카카오 로그인 실패: ${e.brief()}")
                                         Toast.makeText(this@MainActivity, "로그인하지 못했어요. 다시 시도해 주세요", Toast.LENGTH_SHORT).show()
                                     }
                                 }
@@ -189,7 +190,7 @@ class MainActivity : ComponentActivity() {
                                         hasProfile = true
                                         step = StartStep.Map
                                     } catch (e: Exception) {
-                                        Log.e("CalmMap", "우리 아이 설정 저장 실패", e)
+                                        Log.e("CalmMap", "우리 아이 설정 저장 실패: ${e.brief()}")
                                         Toast.makeText(this@MainActivity, "저장하지 못했어요. 다시 시도해 주세요", Toast.LENGTH_SHORT).show()
                                     }
                                     savingProfile = false
@@ -206,7 +207,7 @@ class MainActivity : ComponentActivity() {
                                     try {
                                         AuthRepository.signInWithKakao()
                                     } catch (e: Exception) {
-                                        Log.e("CalmMap", "카카오 로그인 실패", e)
+                                        Log.e("CalmMap", "카카오 로그인 실패: ${e.brief()}")
                                     }
                                 }
                             },
@@ -216,7 +217,7 @@ class MainActivity : ComponentActivity() {
                                     try {
                                         AuthRepository.signOut()
                                     } catch (e: Exception) {
-                                        Log.e("CalmMap", "로그아웃 실패", e)
+                                        Log.e("CalmMap", "로그아웃 실패: ${e.brief()}")
                                     }
                                     browsing = false
                                     hasProfile = false

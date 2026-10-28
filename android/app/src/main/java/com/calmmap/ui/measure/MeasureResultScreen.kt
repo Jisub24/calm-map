@@ -1,6 +1,7 @@
 package com.calmmap.ui.measure
 
 import android.util.Log
+import com.calmmap.data.brief
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
@@ -198,7 +199,7 @@ fun MeasureResultScreen(
                         try {
                             onSave(result.copy(announceLevel = announceLevel, crowd = crowd))
                         } catch (e: Exception) {
-                            Log.w("MeasureResult", "측정 저장 실패", e)
+                            Log.w("MeasureResult", "측정 저장 실패: ${e.brief()}")
                             saveError = "저장하지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요"
                         } finally {
                             saving = false

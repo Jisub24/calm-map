@@ -55,6 +55,7 @@ import com.calmmap.ui.component.InfoButton
 import com.calmmap.ui.component.LevelBadge
 import com.calmmap.ui.component.LevelGlyph
 import com.calmmap.ui.component.PrimaryButton
+import com.calmmap.ui.component.ButtonSize
 import com.calmmap.ui.component.SecondaryButton
 import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.component.outlineBorder
@@ -134,6 +135,9 @@ fun PlaceDetailScreen(
     /** 우리 아이 맞춤은 로그인해야 쓸 수 있다. false 면 누를 때 onLoginNeeded */
     canPersonalize: Boolean = true,
     onLoginNeeded: () -> Unit = {},
+    /** 점수 · 소리 · 빛 · 사업장 탭 값을 못 읽었는지. 그러면 다시 시도 버튼을 띄운다 */
+    detailFailed: Boolean = false,
+    onRetry: () -> Unit = {},
 ) {
     // 0 모두 기준, 1 우리 아이 맞춤
     var basis by remember { mutableIntStateOf(0) }
@@ -193,7 +197,8 @@ fun PlaceDetailScreen(
                     selectedHour = selectedHour,
                     onBarClick = { selectedHour = if (selectedHour == it) null else it },
                 )
-                // 시간대별 말고는 DB 에서 따로 읽는다. 오는 동안 빈 카드
+                // 시간대별 말고는 DB 에서 따로 읽는다. 오는 동안 빈 카드, 못 읽었으면 다시 시도
+                detail == null && detailFailed -> FailedCard(onRetry = onRetry)
                 detail == null -> LoadingCard()
                 tab == DetailTab.SCORE -> ScoreCard(detail.score)
                 tab == DetailTab.SOUND -> SoundCard(detail.sounds, detail.measureCount)
@@ -213,6 +218,15 @@ fun PlaceDetailScreen(
 private fun LoadingCard() {
     DetailCard {
         Text(text = "불러오는 중…", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+    }
+}
+
+/** 탭 값을 못 읽었을 때. 계속 '불러오는 중' 으로 두면 기다려야 하는지 알 수 없다 */
+@Composable
+private fun FailedCard(onRetry: () -> Unit) {
+    DetailCard {
+        Text(text = "정보를 불러오지 못했어요", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+        SecondaryButton(text = "다시 시도", onClick = onRetry, size = ButtonSize.M, modifier = Modifier.fillMaxWidth())
     }
 }
 
