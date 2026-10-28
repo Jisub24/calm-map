@@ -11,18 +11,19 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import com.calmmap.ui.component.ButtonSize
 import com.calmmap.ui.component.CalmIcon
 import com.calmmap.ui.component.CalmIcons
-import com.calmmap.ui.component.CompactSegmented
 import com.calmmap.ui.theme.BgSunken
 import com.calmmap.ui.theme.BrandPrimary
 import com.calmmap.ui.theme.Radius
-import com.calmmap.ui.theme.StatusCaution
-import com.calmmap.ui.theme.StatusCautionSoft
 import com.calmmap.ui.theme.caption
 import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.net.Uri
 import android.provider.Settings
 import android.annotation.SuppressLint
@@ -42,6 +43,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
@@ -56,18 +58,18 @@ import androidx.core.app.ActivityCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.core.content.ContextCompat
+import com.calmmap.data.sound.SoundEventCounter
 import com.calmmap.data.sound.SoundGroup
 import com.calmmap.data.sound.SoundMeter
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.calmmap.ui.component.SecondaryButton
 import com.calmmap.ui.component.TopBar
-import com.calmmap.ui.model.FlickerAnswer
+import com.calmmap.ui.model.LabelStat
 import com.calmmap.ui.model.MEASURE_SECONDS
 import com.calmmap.ui.model.MeasureResult
 import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.SoundScore
-import com.calmmap.ui.model.sampleMeasureCount
 import com.calmmap.ui.model.samplePlaces
 import com.calmmap.ui.theme.CalmMapTheme
 import com.calmmap.ui.theme.TextPrimary
@@ -77,10 +79,14 @@ import com.calmmap.ui.theme.BgSurface
 import com.calmmap.ui.theme.BgSubtle
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
+import kotlin.math.log10
+import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
-// D2 측정 중: 1분 동안 마이크로 듣고 소리 크기와 소리 종류(YAMNet)를 보여준다
-// 1분이 되면 저절로 끝난다. 원래 소리는 분석만 하고 바로 버린다
+// D2 측정 중: 3분 동안 마이크로 듣고 소리 크기와 소리 종류(YAMNet)를 보여준다
+// 3분이 되면 저절로 끝난다. 원래 소리는 분석만 하고 바로 버린다.
+// 끝날 때 저장용 값(Leq · 배경 소음 · 돌발 횟수 · 조도 · 라벨 통계)을 같이 계산한다
 @Composable
 fun MeasuringScreen(
     place: PlaceUi,
@@ -106,31 +112,56 @@ fun MeasuringScreen(
     // 첫 1초가 분석되기 전에는 null
     var db by remember { mutableStateOf<Int?>(null) }
     var sounds by remember { mutableStateOf(SoundGroup.entries.map { SoundScore(it.label, 0f) }) }
-    var flicker by remember { mutableStateOf<FlickerAnswer?>(null) }
-    var announceTaps by remember { mutableIntStateOf(0) }
-    // 마지막으로 센 때. 방송 한 번에 여러 번 눌러도 한 번으로 센다
-    var lastAnnounceAt by remember { mutableIntStateOf(-ANNOUNCE_MERGE_SEC) }
     // 끝날 때 평균을 내려고 매초 값을 더해 둔다
     val dbHistory = remember { mutableListOf<Int>() }
     val labelSums = remember { mutableMapOf<String, Float>() }
     val groupSums = remember { mutableMapOf<SoundGroup, Float>() }
+    // 알림음 · 부딪힘 · 경보 횟수
+    val events = remember { SoundEventCounter() }
+    // 라벨마다 [들린 조각 수, 점수 합]. 점수가 LABEL_PRESENT 이상이면 그 1초에 들린 것으로 본다
+    val labelHits = remember { mutableMapOf<String, FloatArray>() }
+    // 조도 센서 값. 센서는 밝기가 바뀔 때만 알려줘서 가만히 있으면 한두 개만 쌓인다
+    val luxHistory = remember { mutableListOf<Float>() }
+    var hasLightSensor by remember { mutableStateOf(true) }
+    // 듣기 시작한 시각. 저장할 때 measured_at 이 된다
+    var startedAt by remember { mutableStateOf<LocalDateTime?>(null) }
 
     fun finish() {
         val n = dbHistory.size.coerceAtLeast(1)
+        // 소리 크기는 산술 평균이 아니라 Leq(에너지 평균). dB 는 로그라 그냥 평균하면 시끄러운 순간이 묻힌다
+        val leq = if (dbHistory.isEmpty()) 0.0 else 10 * log10(dbHistory.map { 10.0.pow(it / 10.0) }.average())
+        // 배경 소음 LA90: 작은 순으로 늘어놨을 때 아래에서 10% 자리 (90% 의 시간 동안 이보다 컸다)
+        val sorted = dbHistory.sorted()
+        val la90 = if (sorted.isEmpty()) 0.0 else sorted[(sorted.size / 10).coerceAtMost(sorted.size - 1)].toDouble()
+        val luxSorted = luxHistory.sorted()
+        val lux = if (luxSorted.isEmpty()) null else luxSorted[luxSorted.size / 2].toDouble()
         onFinish(
             MeasureResult(
                 place = place,
-                countBefore = sampleMeasureCount(place.id),
-                db = if (dbHistory.isEmpty()) 0 else dbHistory.average().toInt(),
+                countBefore = place.measureCount,
+                db = leq.roundToInt(),
+                startedAt = startedAt ?: LocalDateTime.now().minusSeconds(seconds.toLong()),
+                leq = leq,
+                maxDb = dbHistory.maxOrNull() ?: 0,
+                backgroundDb = la90,
+                alertCount = events.alertCount,
+                suddenCount = events.suddenCount,
+                suddenStrongCount = events.strongCount(la90, SUDDEN_RISE_DB),
+                suddenMaxRise = events.maxRise(la90),
+                lux = lux,
+                luxStatus = when {
+                    !hasLightSensor -> "미측정"
+                    lux == null -> "측정실패"
+                    else -> "측정유효"
+                },
+                labelStats = labelHits.mapValues { (_, hit) -> LabelStat(ratio = hit[0] / n, avgConfidence = hit[1] / hit[0]) },
                 sounds = SoundGroup.entries
                     .map { SoundScore(it.label, (groupSums[it] ?: 0f) / n) }
                     .sortedByDescending { it.score },
                 // 거의 안 들린 라벨(0.01 미만)은 뺀다
                 rawLabels = labelSums.mapValues { it.value / n }.filterValues { it >= 0.01f },
-                flicker = flicker,
                 endedAt = LocalDateTime.now(),
                 seconds = seconds,
-                announceTaps = announceTaps,
             ),
         )
     }
@@ -146,17 +177,43 @@ fun MeasuringScreen(
         if (!hasMic) micLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
 
+    // 조도 센서. 화면에 있는 동안만 듣고 나가면 끈다. 센서가 없는 폰은 미측정
+    DisposableEffect(Unit) {
+        val manager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val sensor = manager.getDefaultSensor(Sensor.TYPE_LIGHT)
+        if (sensor == null) {
+            hasLightSensor = false
+            onDispose {}
+        } else {
+            val listener = object : SensorEventListener {
+                override fun onSensorChanged(event: SensorEvent) {
+                    luxHistory.add(event.values[0])
+                }
+                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+            }
+            manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+            onDispose { manager.unregisterListener(listener) }
+        }
+    }
+
     // 권한이 생기면 듣기 시작. 화면을 나가면 마이크도 꺼진다
     LaunchedEffect(hasMic) {
         if (!hasMic) return@LaunchedEffect
+        if (startedAt == null) startedAt = LocalDateTime.now()
         launch {
             @SuppressLint("MissingPermission") // 바로 위에서 권한을 확인했다
             val readings = SoundMeter(context).readings()
             readings.collect { reading ->
                 db = reading.db
                 dbHistory.add(reading.db)
+                events.add(dbHistory.size, reading)
                 reading.labelScores.forEach { (label, score) ->
                     labelSums[label] = (labelSums[label] ?: 0f) + score
+                    if (score >= LABEL_PRESENT) {
+                        val hit = labelHits.getOrPut(label) { floatArrayOf(0f, 0f) }
+                        hit[0] += 1f
+                        hit[1] += score
+                    }
                 }
                 val groups = SoundGroup.scoresOf(reading.labelScores)
                 groups.forEach { (group, score) -> groupSums[group] = (groupSums[group] ?: 0f) + score }
@@ -217,18 +274,8 @@ fun MeasuringScreen(
             ) {
                 Text(text = "지금 들리는 소리", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
                 SoundBars(sounds = sounds)
-                AnnounceBox(
-                    taps = announceTaps,
-                    onTap = {
-                        if (seconds - lastAnnounceAt >= ANNOUNCE_MERGE_SEC) {
-                            announceTaps++
-                            lastAnnounceAt = seconds
-                        }
-                    },
-                )
             }
 
-            FlickerRow(answer = flicker, onAnswer = { flicker = it })
         }
 
         Row(
@@ -311,57 +358,11 @@ private fun TimerRing(seconds: Int, total: Int, db: Int?) {
     }
 }
 
-/** 이 안에 또 누르면 같은 방송으로 본다. 안내 한 번이 보통 5초쯤이다 */
-private const val ANNOUNCE_MERGE_SEC = 5
+/** 라벨 점수가 이 이상이면 그 1초에 들린 것으로 센다 (measurement_labels 의 ratio 기준) */
+private const val LABEL_PRESENT = 0.1f
 
-// 안내방송은 YAMNet 이 대화와 구분하지 못해서 직접 누른다 (주의 색 상자)
-@Composable
-private fun AnnounceBox(taps: Int, onTap: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(Radius.tile)
-            .background(StatusCautionSoft)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            CalmIcon(CalmIcons.Alert, size = 16.dp, tint = StatusCaution)
-            Text(
-                text = "안내방송이 나오면 눌러주세요. 5초 안에 다시 누르면 같은 방송으로 봐요.",
-                style = MaterialTheme.typography.labelMedium,
-                color = StatusCaution,
-            )
-        }
-        SecondaryButton(
-            text = if (taps == 0) "방송 나왔어요" else "방송 나왔어요 · ${taps}번",
-            onClick = onTap,
-            size = ButtonSize.M,
-        )
-    }
-}
-
-// 밝기 줄 (회색 알약). 깜빡임은 소리로 알 수 없어서 직접 고른다
-@Composable
-private fun FlickerRow(answer: FlickerAnswer?, onAnswer: (FlickerAnswer) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(Radius.pill)
-            .background(BgSubtle)
-            .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CalmIcon(CalmIcons.Sun, size = 18.dp, tint = TextSecondary)
-        Text(text = "조명이 깜빡이나요?", style = MaterialTheme.typography.caption, color = TextSecondary, modifier = Modifier.weight(1f))
-        CompactSegmented(
-            options = FlickerAnswer.entries.map { it.label },
-            selectedIndex = answer?.ordinal ?: -1,
-            onSelect = { onAnswer(FlickerAnswer.entries[it]) },
-        )
-    }
-}
+/** 배경보다 이만큼 튀면 강한 돌발. settings.sudden_rise_db 와 같은 값이어야 한다 */
+private const val SUDDEN_RISE_DB = 10.0
 
 // Compose 의 context 에서 화면(Activity)을 꺼낸다
 private fun Context.findActivity(): Activity? {

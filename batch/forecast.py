@@ -12,17 +12,25 @@
          측정 3건 이상                         → 단계 (무던함 · 보통 · 부담 높음)
            단, 무던함은 측정 시간 합이 10분 이상일 때만. 모자라면 '후보'
          측정 1~2건                            → 후보 (점수는 보여주되 점선)
-         측정 없음 · 앞뒤 실측 사이를 이을 수 있음 → 추정 (점선)
+         측정 없음 · 앞뒤 실측 사이를 이을 수 있음 → 후보 (점선)
          둘 다 안 됨                           → 정보 부족
+       후보라도 점수가 부담 높음이면 '부담 높음' 으로 표시한다 (점선은 그대로).
+         답변서2 질의1: '무던함' 은 실측으로 확인된 시간대에만, '부담 높음' 주의는 추정이어도 표시.
+         표에는 status='level' · level='high' · is_estimated=true 로 쓴다
     5. 실측 없는 칸은 지역 혼잡 예측의 "모양"을 빌려 추정한다 (답변서 질의 2)
          실측이 있었던 시각의 지역 혼잡 단계와 점수를 짝지어 두고,
          추정할 시각의 혼잡 예측 단계가 그 사이에 들어오면 직선으로 잇는다.
          범위 밖이면 지어내지 않고 정보 부족.
     6. 칸마다 지역 혼잡 1~4 를 붙인다 (선 그래프용. 점수에는 안 들어간다)
 
+오늘만이 아니라 평일 · 주말 중 오늘이 아닌 쪽의 가장 가까운 날도 같이 쓴다.
+    앱 지도의 '시간 선택' 에서 그쪽을 고르면 그 날 줄을 읽는다.
+    평일이면 다가오는 토요일, 주말이면 다가오는 월요일. 혼잡 예측은 12시간 앞까지라
+    그 날은 실측이 있는 칸만 채워지고 나머지는 정보 부족이다.
+
 실행
-    python batch/forecast.py                          오늘 (한국 시각) · DB 측정으로 · 저장
-    python batch/forecast.py --date 2026-10-27        그 날짜로
+    python batch/forecast.py                          오늘 + 다른 쪽 가장 가까운 날 (한국 시각) · DB 측정으로 · 저장
+    python batch/forecast.py --date 2026-10-27        그 날짜 하나만
     python batch/forecast.py --sheet analysis/측정결과.csv --dry-run
                                                       답사 녹음 분석 결과로 돌려 보고 저장은 안 함
 """
@@ -34,7 +42,7 @@ from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
-from calculate_score import CALM, KOR, level_of, rows_from_sheet, score_measurement
+from calculate_score import CALM, HIGH, KOR, level_of, rows_from_sheet, score_measurement
 from common import get_settings, require_env, sb_select, sb_upsert
 
 KST = timezone(timedelta(hours=9))
@@ -55,6 +63,16 @@ def parse_ts(s):
 def weekday_group(d):
     """평일 / 주말. 장소당 측정이 적어 요일별로는 칸을 못 채운다 (답변서 질의 2)."""
     return "weekend" if d.isoweekday() >= 6 else "weekday"
+
+
+def other_group_day(d):
+    """평일 · 주말 중 d 가 아닌 쪽의 가장 가까운 날. 평일이면 다가오는 토요일, 주말이면 다가오는 월요일.
+
+    앱(PlaceRepository.otherGroupDay)이 같은 날을 읽으니 둘을 같이 고친다.
+    """
+    if weekday_group(d) == "weekday":
+        return d + timedelta(days=6 - d.isoweekday())
+    return d + timedelta(days=8 - d.isoweekday())
 
 
 def open_hours(hours_row):
@@ -151,22 +169,26 @@ def median_scores(scored):
     return out
 
 
-def judge(n, total_sec, total, s, demo=False):
-    """상태 · 단계 · 점선 여부.
+def judge(n, total_sec, total, s):
+    """실측이 있는 칸의 상태 · 단계 · 점선 여부.
 
-    무던함은 확인된 때만, 부담 높음은 추정이어도 — 이 비대칭이 답변서 핵심.
-    demo(시연 장소)는 측정이 적어도 1건부터 단계로 둔다 (settings.demo_places, 022).
+    무던함은 확인된 때만, 부담 높음은 추정이어도 — 이 비대칭이 답변서 핵심 (답변서2 질의1).
     """
     if total is None:
         return "insufficient", None, False
-    if demo:
-        return "level", level_of(total, s), False
+    lv = level_of(total, s)
     if n >= s["min_measurements"]:
-        lv = level_of(total, s)
         if lv == CALM and total_sec < s["calm_min_total_sec"]:
             return "estimate", None, True        # 조용했지만 합 10분 미만 → 후보
         return "level", lv, False
-    return "estimate", None, True                # 1~2건 → 후보
+    return estimated(lv)                         # 1~2건 → 후보 (부담 높음은 표시)
+
+
+def estimated(lv):
+    """후보 칸. 부담 높음이면 단계로 알리되 점선(추정)으로 둔다. 나머지는 단계 이름 없이 후보."""
+    if lv == HIGH:
+        return "level", HIGH, True
+    return "estimate", None, True
 
 
 def interpolate(points, c_target):
@@ -218,9 +240,8 @@ def build_rows(target_date, places, hours_by_place, measurements, congestion, s)
     for p in places:
         pid, area = p["id"], p["congestion_area_cd"]
         hours = open_hours(hours_by_place.get((pid, weekday)))
-        # 시연 장소는 평일 · 주말을 가리지 않고 모든 측정을 쓴다 (022)
-        demo = pid in set(s.get("demo_places", []))
-        mine = [r for r in scored if r["place_id"] == pid and (demo or r["group"] == group)]
+        # 같은 요일 묶음(평일 / 주말)의 측정만 쓴다. 시연 장소 예외(022)는 없앴다 (025)
+        mine = [r for r in scored if r["place_id"] == pid and r["group"] == group]
         by_hour = defaultdict(list)
         for r in mine:
             by_hour[r["hour"]].append(r)
@@ -246,17 +267,14 @@ def build_rows(target_date, places, hours_by_place, measurements, congestion, s)
             got = by_hour.get(h)
             if got:
                 agg = median_scores(got)
-                status, level, est = judge(len(got), sum(r["duration_sec"] for r in got), agg["total_score"], s, demo)
+                status, level, est = judge(len(got), sum(r["duration_sec"] for r in got), agg["total_score"], s)
                 row.update(agg)
                 row.update({"measurement_count": len(got),
                             "last_measured_at": max(r["measured_at"] for r in got).isoformat()})
-            elif demo:
-                # 시연 장소: 측정한 시각만 단계, 나머지 시각은 지어내지 않고 정보 부족 (022)
-                status, level, est = "insufficient", None, False
             else:
                 agg = interpolate(points, area_level)
                 if agg:
-                    row.update(agg); status, level, est = "estimate", None, True
+                    row.update(agg); status, level, est = estimated(level_of(agg["total_score"], s))
                 else:
                     status, level, est = "insufficient", None, False
             row.update({"status": status, "level": level, "is_estimated": est})
@@ -290,31 +308,33 @@ def print_rows(rows, places):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--date", help="YYYY-MM-DD. 기본은 오늘(한국 시각)")
+    ap.add_argument("--date", help="YYYY-MM-DD. 그 날짜 하나만. 없으면 오늘 + 평일 · 주말 중 다른 쪽 가장 가까운 날")
     ap.add_argument("--sheet", help="DB 대신 읽을 측정 csv (analysis/측정결과.csv)")
     ap.add_argument("--dry-run", action="store_true", help="저장하지 않고 출력만")
     args = ap.parse_args()
 
     require_env()
     s = get_settings()
-    target = date.fromisoformat(args.date) if args.date else datetime.now(KST).date()
+    today = datetime.now(KST).date()
+    targets = [date.fromisoformat(args.date)] if args.date else [today, other_group_day(today)]
 
     places = sb_select("places", {"select": "id,name,congestion_area_cd", "order": "id"})
     hours_by_place = {(h["place_id"], h["weekday"]): h for h in sb_select("place_hours", {"select": "*"})}
     measurements = load_measurements_sheet(args.sheet) if args.sheet else load_measurements_db()
 
-    earliest = min([m["measured_at"] for m in measurements] + [datetime.combine(target, time(0), KST)])
+    earliest = min([m["measured_at"] for m in measurements] + [datetime.combine(min(targets), time(0), KST)])
     congestion = load_congestion(sorted({p["congestion_area_cd"] for p in places}), earliest - timedelta(hours=1))
 
-    rows = build_rows(target, places, hours_by_place, measurements, congestion, s)
-    print(f"{target} ({'주말' if weekday_group(target) == 'weekend' else '평일'}) · 측정 {len(measurements)}건 · 칸 {len(rows)}개")
-    print_rows(rows, places)
+    for target in targets:
+        rows = build_rows(target, places, hours_by_place, measurements, congestion, s)
+        print(f"\n{target} ({'주말' if weekday_group(target) == 'weekend' else '평일'}) · 측정 {len(measurements)}건 · 칸 {len(rows)}개")
+        print_rows(rows, places)
 
-    if args.dry_run:
-        print("\n(저장하지 않음)")
-        return
-    n = sb_upsert("hourly_forecast", rows, on_conflict="place_id,date,hour")
-    print(f"\nhourly_forecast 에 {n}줄 저장")
+        if args.dry_run:
+            print("\n(저장하지 않음)")
+            continue
+        n = sb_upsert("hourly_forecast", rows, on_conflict="place_id,date,hour")
+        print(f"\nhourly_forecast 에 {n}줄 저장")
 
 
 if __name__ == "__main__":

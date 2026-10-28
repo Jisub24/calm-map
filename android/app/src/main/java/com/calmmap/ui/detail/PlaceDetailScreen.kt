@@ -180,23 +180,23 @@ fun PlaceDetailScreen(
 
             RecommendationCard(recommendation = place.recommendation, basis = place.recommendationBasis)
 
-            if (detail != null) {
-                CalmTabs(
-                    tabs = DetailTab.entries.map { it.label },
-                    selectedIndex = tab.ordinal,
-                    onSelect = { tab = DetailTab.entries[it] },
-                )
-            }
+            CalmTabs(
+                tabs = DetailTab.entries.map { it.label },
+                selectedIndex = tab.ordinal,
+                onSelect = { tab = DetailTab.entries[it] },
+            )
 
             when {
-                detail == null || tab == DetailTab.HOURLY -> HourlyCard(
+                tab == DetailTab.HOURLY -> HourlyCard(
                     place = place,
                     nowHour = nowHour,
                     selectedHour = selectedHour,
                     onBarClick = { selectedHour = if (selectedHour == it) null else it },
                 )
+                // 시간대별 말고는 DB 에서 따로 읽는다. 오는 동안 빈 카드
+                detail == null -> LoadingCard()
                 tab == DetailTab.SCORE -> ScoreCard(detail.score)
-                tab == DetailTab.SOUND -> SoundCard(detail.sounds)
+                tab == DetailTab.SOUND -> SoundCard(detail.sounds, detail.measureCount)
                 tab == DetailTab.LIGHT -> LightCard(detail)
                 else -> BusinessCard(detail)
             }
@@ -206,6 +206,13 @@ fun PlaceDetailScreen(
             SecondaryButton(text = "이 장소 측정", onClick = onMeasureClick, modifier = Modifier.weight(1f))
             PrimaryButton(text = "이 시간에 방문", onClick = onVisitClick, modifier = Modifier.weight(1f))
         }
+    }
+}
+
+@Composable
+private fun LoadingCard() {
+    DetailCard {
+        Text(text = "불러오는 중…", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
     }
 }
 
@@ -302,20 +309,29 @@ private fun RecommendationCard(recommendation: String, basis: String) {
 @Composable
 private fun HourlyCard(place: PlaceUi, nowHour: Int, selectedHour: Int?, onBarClick: (Int) -> Unit) {
     val today = LocalDate.now(ZoneId.of("Asia/Seoul"))
-    val week = today.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.KOREAN)
-    val weekend = today.dayOfWeek.value >= 6
+    // 지도에서 시간을 골랐으면 그 날 · 그 시각. 오늘이 아닌 날은 '오늘' 대신 요일로 부른다
+    val day = place.date ?: today
+    val week = day.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.KOREAN)
+    val dayType = if (day.dayOfWeek.value >= 6) "주말" else "평일"
+    val markHour = place.slot?.hour ?: nowHour
+    val markLabel = if (place.slot == null) "지금" else "선택"
     DetailCard {
-        CardTitle(title = "오늘 시간대별 감각부하", trailing = "$week · ${if (weekend) "주말" else "평일"}")
+        if (day == today) {
+            CardTitle(title = "오늘 시간대별 감각부하", trailing = "$week · $dayType")
+        } else {
+            CardTitle(title = "$week 시간대별 감각부하", trailing = "${day.monthValue}/${day.dayOfMonth} · $dayType")
+        }
         if (place.hours.isEmpty()) {
             Text(text = "아직 시간대 정보가 없어요", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
         } else {
             HourlyBarChart(
                 bars = place.hours,
-                nowHour = nowHour,
+                nowHour = markHour,
+                nowLabel = markLabel,
                 selectedHour = selectedHour,
                 onBarClick = { onBarClick(it.hour) },
             )
-            ChartLegend()
+            ChartLegend(bars = place.hours)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 CalmIcon(CalmIcons.Check, size = 14.dp, tint = BrandPrimary)
                 Text(text = "예측 결과가 아이의 반응을 보장하지는 않아요", style = MaterialTheme.typography.caption, color = TextTertiary)
@@ -323,8 +339,13 @@ private fun HourlyCard(place: PlaceUi, nowHour: Int, selectedHour: Int?, onBarCl
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(BorderDefault))
         CardTitle(title = "주변 지역 혼잡", info = "서울시가 추정한 혼잡도예요. 매장 안 혼잡도와 다를 수 있어요.")
-        // 오늘 줄이 있으면 실제 지역 혼잡, 없으면 예시 값
-        AreaCongestionChart(levels = place.areaCrowd.ifEmpty { sampleAreaCongestion }, nowHour = nowHour)
+        // 줄이 있으면 실제 지역 혼잡, 없으면 예시 값.
+        // 다가오는 주말처럼 먼 날은 서울시 예측(12시간 앞까지)이 없어서 빈 그래프 대신 글로 알린다
+        if (place.areaCrowd.isNotEmpty() && place.areaCrowd.all { it == null }) {
+            Text(text = "주변 지역 혼잡 예측이 아직 없어요. 서울시 예측은 12시간 앞까지만 나와요", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+        } else {
+            AreaCongestionChart(levels = place.areaCrowd.ifEmpty { sampleAreaCongestion }, nowHour = markHour)
+        }
     }
 }
 
@@ -483,7 +504,14 @@ private fun PointTip(hour: Int, word: String, index: Int, slotCount: Int, pointT
 // ── 점수 ────────────────────────────────────────────────
 
 @Composable
-private fun ScoreCard(score: ScoreBreakdown) {
+private fun ScoreCard(score: ScoreBreakdown?) {
+    if (score == null) {
+        DetailCard {
+            CardTitle(title = "점수")
+            Text(text = "아직 점수가 없어요. 측정이 쌓이면 보여드려요", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+        }
+        return
+    }
     DetailCard {
         CardTitle(
             title = "${score.hour}시는 왜 ${levelWord(score.total)}인가요",
@@ -494,16 +522,22 @@ private fun ScoreCard(score: ScoreBreakdown) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     CalmIcon(factorIcon(factor.label), size = 18.dp, tint = if (factor.isMain) BrandPrimary else TextSecondary)
                     Text(text = factor.label, style = MaterialTheme.typography.labelLarge, color = TextPrimary, modifier = Modifier.weight(1f))
-                    ScoreBar(score = factor.score, main = factor.isMain)
+                    ScoreBar(score = factor.score ?: 0, main = factor.isMain)
                     Text(
-                        text = "${factor.score}",
+                        text = factor.score?.toString() ?: "–",
                         style = MaterialTheme.typography.labelLarge,
                         color = if (factor.isMain) BrandPrimary else TextPrimary,
                         textAlign = TextAlign.End,
                         modifier = Modifier.width(24.dp),
                     )
                 }
-                if (factor.isMain) MainFactorNote(text = score.mainFactor)
+                if (factor.isMain && score.mainFactor.isNotBlank()) MainFactorNote(text = score.mainFactor)
+                else if (factor.note != null) Text(
+                    text = factor.note,
+                    style = MaterialTheme.typography.caption,
+                    color = TextTertiary,
+                    modifier = Modifier.padding(start = 28.dp),
+                )
             }
         }
         // 종합 점수
@@ -516,7 +550,7 @@ private fun ScoreCard(score: ScoreBreakdown) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = "종합 점수", style = MaterialTheme.typography.caption, color = TextTertiary)
+                Text(text = "종합 점수 · 4개 중 가장 높은 값", style = MaterialTheme.typography.caption, color = TextTertiary)
                 Text(text = "${score.total}", style = MaterialTheme.typography.displayMedium, color = TextPrimary)
             }
             LevelBadge(level = levelOf(score.total))
@@ -563,7 +597,7 @@ private fun ScoreBar(score: Int, main: Boolean) {
                 .background(
                     when {
                         main -> BrandPrimary
-                        score >= 67 -> LevelHigh
+                        score >= 70 -> LevelHigh
                         score >= 40 -> LevelMid
                         else -> LevelCalm
                     },
@@ -609,9 +643,13 @@ private fun factorIcon(label: String): CalmIcons = when {
 // ── 소리 ────────────────────────────────────────────────
 
 @Composable
-private fun SoundCard(sounds: List<SoundRow>) {
+private fun SoundCard(sounds: List<SoundRow>, measureCount: Int?) {
     DetailCard {
-        CardTitle(title = "이 장소에서 들리는 소리")
+        CardTitle(title = "이 장소에서 들리는 소리", trailing = measureCount?.let { "측정 ${it}회" })
+        if (sounds.isEmpty()) {
+            Text(text = "아직 소리 측정이 없어요", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+            return@DetailCard
+        }
         sounds.forEach { row ->
             if (row.emphasized) {
                 // 강조 줄: 연한 파랑 상자 + 횟수 크게
@@ -795,7 +833,7 @@ private fun BusinessCard(detail: PlaceDetailUi) {
                 }
             }
             Text(
-                text = "우리 관측: ${calm.aiHours} (${calm.aiBasis}). 방문 혼잡은 관측으로 확인된 시간대만 쓰고, 등록한 시간은 점수에 넣지 않아요.",
+                text = "방문 권고는 관측으로 확인된 시간을 먼저 써요. 등록만으로 점수를 낮추지 않아요.",
                 style = MaterialTheme.typography.caption,
                 color = TextTertiary,
             )
@@ -813,8 +851,9 @@ private fun actionIcon(action: String): CalmIcons = when {
 /** 점수를 단계 말로 바꾼다. 숫자만 보여주면 80이 높은 건지 낮은 건지 모른다 */
 private fun levelWord(score: Int): String = levelOf(score).label
 
+// 기준선은 settings.level_thresholds(40 · 70)와 같은 값. 지도 그래프(PlaceRepository)와도 같다
 private fun levelOf(score: Int): SensoryLevel = when {
-    score >= 67 -> SensoryLevel.HIGH
-    score >= 34 -> SensoryLevel.MID
+    score >= 70 -> SensoryLevel.HIGH
+    score >= 40 -> SensoryLevel.MID
     else -> SensoryLevel.CALM
 }

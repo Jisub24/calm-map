@@ -11,8 +11,11 @@ import com.calmmap.ui.theme.SensoryLevel
 data class PlaceDetailUi(
     /** 보호자가 '매우 민감'으로 고른 자극이 관측됐을 때 띄우는 한 줄. 없으면 null */
     val warning: String? = null,
-    val score: ScoreBreakdown,
+    /** 지금 시각의 점수 내역. 오늘 점수가 한 칸도 없으면 null */
+    val score: ScoreBreakdown?,
     val sounds: List<SoundRow> = emptyList(),
+    /** 소리 탭 제목 옆 "최근 측정 N회". 모르면 null */
+    val measureCount: Int? = null,
     val light: LightInfo? = null,
     val calmHours: CalmHours? = null,
 )
@@ -37,9 +40,12 @@ data class ScoreBreakdown(
 
 data class ScoreFactor(
     val label: String,
-    val score: Int,
+    /** 0~100. 그 항목을 낼 재료가 없으면 null ("–" 로 보인다) */
+    val score: Int?,
     /** 최댓값이라 종합 지수가 된 항목 */
     val isMain: Boolean = false,
+    /** 줄 아래 작은 설명. "측정한 분들 답 · 붐빔" */
+    val note: String? = null,
 )
 
 /** 소리 묶음 한 줄 */
@@ -65,12 +71,10 @@ data class LightInfo(
     val report: String? = null,
 )
 
-/** 사업장이 등록한 시간과 우리가 관측으로 뽑은 시간을 나란히 보여준다 */
+/** 사업장이 등록한 조용한 시간. 점수에는 넣지 않고 따로 보여준다 */
 data class CalmHours(
     val businessHours: String?,
     val businessActions: String?,
-    val aiHours: String,
-    val aiBasis: String,
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -116,8 +120,6 @@ val sampleMartDetail = PlaceDetailUi(
     calmHours = CalmHours(
         businessHours = "화 10~12시",
         businessActions = "음악 끔 · 조명 낮춤 · 방송 줄임",
-        aiHours = "화 10~12시 보통",
-        aiBasis = "실측 2회",
     ),
 )
 
