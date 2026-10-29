@@ -37,7 +37,7 @@ import com.calmmap.ui.component.GhostButton
 import com.calmmap.ui.component.PrimaryButton
 import com.calmmap.ui.component.pressFade
 import com.calmmap.ui.model.VisitFeeling
-import com.calmmap.ui.model.visitTriggers
+import com.calmmap.ui.model.HardFactor
 import com.calmmap.ui.theme.BgSubtle
 import com.calmmap.ui.theme.BgSurface
 import com.calmmap.ui.theme.BrandPrimary
@@ -56,13 +56,13 @@ import com.calmmap.ui.theme.caption
 fun AfterVisitScreen(
     placeName: String,
     whenLabel: String,
-    onSubmit: (feeling: VisitFeeling, triggers: List<String>) -> Unit,
+    onSubmit: (feeling: VisitFeeling, triggers: List<HardFactor>) -> Unit,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // 고른 반응. 고르기 전에는 null 이라 '기록하기' 를 누를 수 없다
     var feeling by remember { mutableStateOf<VisitFeeling?>(null) }
-    val picked = remember { mutableStateListOf<String>() }
+    val picked = remember { mutableStateListOf<HardFactor>() }
 
     Column(
         modifier = modifier
@@ -99,11 +99,18 @@ fun AfterVisitScreen(
             Text(text = "무엇이 힘들었나요? (선택)", style = MaterialTheme.typography.labelLarge, color = TextPrimary)
             Spacer(Modifier.height(10.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                visitTriggers.forEach { trigger ->
+                HardFactor.entries.forEach { trigger ->
                     FilterChip(
-                        label = trigger,
+                        label = trigger.label,
                         selected = trigger in picked,
-                        onClick = { if (trigger in picked) picked.remove(trigger) else picked.add(trigger) },
+                        onClick = {
+                            when {
+                                trigger in picked -> picked.remove(trigger)
+                                // '잘 모르겠어요' 는 다른 요인과 같이 고를 수 없다
+                                trigger == HardFactor.UNKNOWN -> { picked.clear(); picked.add(trigger) }
+                                else -> { picked.remove(HardFactor.UNKNOWN); picked.add(trigger) }
+                            }
+                        },
                     )
                 }
             }

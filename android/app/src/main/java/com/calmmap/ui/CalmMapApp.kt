@@ -411,7 +411,7 @@ fun CalmMapApp(
                                     placeName = plan.place.name,
                                     visitedAt = plan.recordLabel,
                                     feeling = feeling,
-                                    trigger = triggers.joinToString(", ").ifEmpty { null },
+                                    trigger = triggers.joinToString(", ") { it.label }.ifEmpty { null },
                                 ),
                             )
                             finishPlan(plan)

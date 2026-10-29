@@ -71,5 +71,16 @@ val sampleQuietSpots = listOf(
     QuietSpot("비상계단 앞 복도", "약 15m"),
 )
 
-/** 방문 후 기록에서 고르는 '무엇이 힘들었나요' */
-val visitTriggers = listOf("갑작스러운 소리", "사람 많음", "밝은 조명", "기다림", "잘 모르겠어요")
+/**
+ * 방문 후 기록에서 고르는 '무엇이 힘들었나요'. dbValue 는 visits.hard_factors 에 들어가는 값 (011 규칙과 같게).
+ * '잘 모르겠어요' 는 DB 에 넣지 않고 비워 둔다
+ */
+enum class HardFactor(val label: String, val dbValue: String?) {
+    ANNOUNCEMENT("안내방송", "announcement"),
+    SPEECH("말소리", "speech"),
+    MUSIC("음악", "music"),
+    MACHINE("기계음", "machine"),
+    SUDDEN("갑작스러운 소리", "sudden"),
+    CROWD("사람 많음", "crowd"),
+    UNKNOWN("잘 모르겠어요", null),
+}
