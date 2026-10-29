@@ -396,11 +396,24 @@ fun CalmMapApp(
                 onBack = { screen = cardFrom },
                 onChildViewClick = { screen = Screen.VISIT_CHILD },
                 onDepartClick = { screen = Screen.VISIT_ONSITE },
-                // 그 계획만 빼고 들어온 곳으로. 목록이 비면 지도로
+                // DB 에서 지운 뒤에 그 계획만 빼고 들어온 곳으로. 목록이 비면 지도로.
+                // 못 지우면 카드에 남는다. 앱에서만 빼면 다시 켰을 때 취소한 예정이 돌아온다
                 onCancelVisit = {
-                    activePlan?.let { visitPlans.remove(it) }
-                    activePlan = null
-                    screen = if (cardFrom == Screen.VISIT_PLANS && visitPlans.isEmpty()) Screen.MAP else cardFrom
+                    val plan = activePlan
+                    if (plan != null) scope.launch {
+                        try {
+                            VisitRepository.cancel(plan.place.id)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.w("CalmMap", "방문 취소 실패: ${e.brief()}")
+                            Toast.makeText(context, "취소하지 못했어요. 인터넷 연결을 확인해 주세요", Toast.LENGTH_SHORT).show()
+                            return@launch
+                        }
+                        visitPlans.remove(plan)
+                        activePlan = null
+                        screen = if (cardFrom == Screen.VISIT_PLANS && visitPlans.isEmpty()) Screen.MAP else cardFrom
+                    }
                 },
             )
 

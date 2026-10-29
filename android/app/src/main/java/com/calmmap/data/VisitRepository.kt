@@ -86,6 +86,21 @@ object VisitRepository {
         }
     }
 
+    /**
+     * 그 장소의 방문 예정을 지운다. 기록 전 줄만 지워서 다녀온 뒤 기록은 남는다.
+     * 줄 번호 하나가 아니라 장소로 지워서, 예전에 겹쳐 생긴 줄이 있어도 같이 사라진다
+     */
+    suspend fun cancel(placeId: Long) {
+        withFreshSession {
+            supabase.from("visits").delete {
+                filter {
+                    eq("place_id", placeId)
+                    exact("result", null)
+                }
+            }
+        }
+    }
+
     /** "2026-10-31T15:00+09:00". 폰 시간대와 상관없이 서울 시각으로 */
     private fun plannedAt(date: LocalDate, hour: Int): String =
         date.atTime(hour, 0).atZone(SEOUL).toOffsetDateTime().toString()
