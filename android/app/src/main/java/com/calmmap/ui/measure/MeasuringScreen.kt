@@ -79,6 +79,7 @@ import com.calmmap.ui.theme.BgSurface
 import com.calmmap.ui.theme.BgSubtle
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.roundToInt
@@ -140,7 +141,7 @@ fun MeasuringScreen(
                 place = place,
                 countBefore = place.measureCount,
                 db = leq.roundToInt(),
-                startedAt = startedAt ?: LocalDateTime.now().minusSeconds(seconds.toLong()),
+                startedAt = startedAt ?: LocalDateTime.now(ZoneId.of("Asia/Seoul")).minusSeconds(seconds.toLong()),
                 leq = leq,
                 maxDb = dbHistory.maxOrNull() ?: 0,
                 backgroundDb = la90,
@@ -151,7 +152,8 @@ fun MeasuringScreen(
                 lux = lux,
                 luxStatus = when {
                     !hasLightSensor -> "미측정"
-                    lux == null -> "측정실패"
+                    // 센서가 가려졌거나(주머니) 센서가 없는 에뮬레이터. 이 값을 쓰면 장소가 실제보다 어둡게 나온다
+                    lux == null || lux < MIN_VALID_LUX -> "측정실패"
                     else -> "측정유효"
                 },
                 labelStats = labelHits.mapValues { (_, hit) -> LabelStat(ratio = hit[0] / n, avgConfidence = hit[1] / hit[0]) },
@@ -160,7 +162,7 @@ fun MeasuringScreen(
                     .sortedByDescending { it.score },
                 // 거의 안 들린 라벨(0.01 미만)은 뺀다
                 rawLabels = labelSums.mapValues { it.value / n }.filterValues { it >= 0.01f },
-                endedAt = LocalDateTime.now(),
+                endedAt = LocalDateTime.now(ZoneId.of("Asia/Seoul")),
                 seconds = seconds,
             ),
         )
@@ -199,7 +201,8 @@ fun MeasuringScreen(
     // 권한이 생기면 듣기 시작. 화면을 나가면 마이크도 꺼진다
     LaunchedEffect(hasMic) {
         if (!hasMic) return@LaunchedEffect
-        if (startedAt == null) startedAt = LocalDateTime.now()
+        // 폰 시간대가 한국이 아니어도(에뮬레이터는 UTC) 한국 시각으로 잰다. 점수 칸이 한국 시각 기준이라서
+        if (startedAt == null) startedAt = LocalDateTime.now(ZoneId.of("Asia/Seoul"))
         launch {
             @SuppressLint("MissingPermission") // 바로 위에서 권한을 확인했다
             val readings = SoundMeter(context).readings()
@@ -363,6 +366,9 @@ private const val LABEL_PRESENT = 0.1f
 
 /** 배경보다 이만큼 튀면 강한 돌발. settings.sudden_rise_db 와 같은 값이어야 한다 */
 private const val SUDDEN_RISE_DB = 10.0
+
+/** 이보다 어두우면 밝기를 못 잰 것으로 본다. 불 켠 매장 안은 5 lux 아래로 내려가지 않는다. batch LUX_MIN 과 같은 값 */
+private const val MIN_VALID_LUX = 5.0
 
 // Compose 의 context 에서 화면(Activity)을 꺼낸다
 private fun Context.findActivity(): Activity? {

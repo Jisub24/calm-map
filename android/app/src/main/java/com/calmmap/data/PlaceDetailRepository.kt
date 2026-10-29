@@ -57,7 +57,7 @@ object PlaceDetailRepository {
     )
 
     @Serializable
-    private data class PlaceRow(val id: Long, val congestion_area_cd: String)
+    private data class PlaceRow(val id: Long, val congestion_area_cd: String? = null)
 
     @Serializable
     private data class AreaRow(val area_cd: String, val area_nm: String)
@@ -150,9 +150,10 @@ object PlaceDetailRepository {
             }.onFailure { Log.w(TAG, "장소 상세 일부 읽기 실패: ${it.brief()}") }.getOrNull()
         }
 
-        // 지역 이름 · 상권은 장소의 지역 코드를 알아야 읽을 수 있다
+        // 지역 이름 · 상권은 장소의 지역 코드를 알아야 읽을 수 있다. 1km 안에 지역이 없는 장소(027)는 비어 있다
         val areaCd = placeRow.await().congestion_area_cd
         val area = async {
+            if (areaCd == null) return@async null
             runCatching {
                 supabase.from("congestion_areas")
                     .select(Columns.list("area_cd", "area_nm")) { filter { eq("area_cd", areaCd) } }
@@ -160,6 +161,7 @@ object PlaceDetailRepository {
             }.onFailure { Log.w(TAG, "장소 상세 일부 읽기 실패: ${it.brief()}") }.getOrNull()
         }
         val commercial = async {
+            if (areaCd == null) return@async null
             runCatching {
                 supabase.from("commercial")
                     .select(Columns.list("id", "level", "level_text")) {
@@ -185,8 +187,9 @@ object PlaceDetailRepository {
         PlaceDetailUi(
             score = scoreOf(rows, hour, dayType, m, place, areaName, commercialRow, categories),
             sounds = soundRowsOf(soundRows, m),
+            fixedSounds = fixedSoundRowsOf(soundRows, m),
             measureCount = m?.measurement_count ?: soundRows.maxOfOrNull { it.measurement_count },
-            light = lightOf(rows, hour, m),
+            light = lightOf(rows, m),
             calmHours = calmHoursOf(calmHours.await()),
         )
     }
@@ -274,6 +277,23 @@ object PlaceDetailRepository {
         }
     }
 
+    /**
+     * 정보 부족 화면 소리 탭. 답변서2 질의1 이 장소 고유값으로 둔 것만 — 안내방송 빈도 · 배경 음악.
+     * 말소리 · 돌발 소리는 붐비는 정도를 따라 시간마다 달라져서 그 시간대 기록(장소 상세)에서만 보여준다
+     */
+    private fun fixedSoundRowsOf(rows: List<SoundSummaryRow>, m: MeasureSummaryRow?): List<SoundRow> {
+        if (rows.isEmpty() && m == null) return emptyList()
+        val announce = m?.announce_per_hour ?: 0.0
+        return listOf(
+            if (announce > 0) {
+                SoundRow("안내방송", "${fmt(announce)}회 / 1시간", emphasized = true, subLabel = "안내 앞 알림음과 말소리로 추정했어요")
+            } else {
+                SoundRow("안내방송", "없음")
+            },
+            SoundRow("배경 음악", freqWord(rows.firstOrNull { it.sound_type == "music" }?.ratio)),
+        )
+    }
+
     /** 비율 → 말. 소리 탭의 빈도 막대(FrequencyMeter)가 이 말을 다시 0~4 로 읽는다 */
     private fun freqWord(ratio: Double?): String = when {
         ratio == null || ratio <= 0.0 -> "없음"
@@ -285,9 +305,10 @@ object PlaceDetailRepository {
 
     // ── 빛 탭 ──────────────────────────────────────────────
 
-    private fun lightOf(rows: List<ForecastRow>, nowHour: Int, m: MeasureSummaryRow?): LightInfo? {
+    private fun lightOf(rows: List<ForecastRow>, m: MeasureSummaryRow?): LightInfo? {
         val lux = m?.lux_median ?: return null
-        val score = nowRow(rows, nowHour)?.score_light
+        // 밝기는 장소 고유값이라 batch 가 모든 칸(평일 · 주말 · 빈 칸까지)에 같은 값을 넣는다
+        val score = rows.firstNotNullOfOrNull { it.score_light }
         return LightInfo(
             lux = lux.roundToInt(),
             luxLevel = when {

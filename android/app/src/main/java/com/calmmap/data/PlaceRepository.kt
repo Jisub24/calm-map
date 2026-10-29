@@ -2,6 +2,7 @@ package com.calmmap.data
 
 import android.util.Log
 import com.calmmap.ui.model.HourBar
+import com.calmmap.ui.model.OtherRecord
 import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.TimeSlot
 import com.calmmap.ui.theme.SensoryLevel
@@ -41,6 +42,7 @@ object PlaceRepository {
         val category: String,
         val lat: Double,
         val lng: Double,
+        val kakao_id: String? = null,
     )
 
     /** 요일 하나의 영업시간. 시각은 "09:00:00", 닫는 시각은 "24:00:00" 도 온다 */
@@ -100,7 +102,7 @@ object PlaceRepository {
         // 네 표를 동시에 읽는다
         val places = async {
             supabase.from("places")
-                .select(Columns.list("id", "name", "category", "lat", "lng"))
+                .select(Columns.list("id", "name", "category", "lat", "lng", "kakao_id"))
                 .decodeList<PlaceRow>()
         }
         val hours = async {
@@ -139,7 +141,12 @@ object PlaceRepository {
 
         MapPlaces { slot ->
             val byPlace = if (slot == null) todayByPlace else slotsByGroup[slot.dayGroup].orEmpty()
-            placeRows.map { row -> placeUi(row, byPlace[row.id].orEmpty(), hoursByPlace[row.id], now, slot) }
+            // 지금 보는 묶음의 반대쪽. 이쪽에 측정이 없으면 "주말 기록 보기" 로 안내한다
+            val otherWeekend = !(slot?.weekend ?: isWeekend(now.toLocalDate()))
+            val otherByPlace = slotsByGroup[if (otherWeekend) "weekend" else "weekday"].orEmpty()
+            placeRows.map { row ->
+                placeUi(row, byPlace[row.id].orEmpty(), hoursByPlace[row.id], now, slot, otherByPlace[row.id].orEmpty(), otherWeekend)
+            }
         }
     }
 
@@ -156,8 +163,13 @@ object PlaceRepository {
         hours: List<HoursRow>?,
         now: ZonedDateTime,
         slot: TimeSlot?,
+        /** 반대쪽 묶음(평일 ↔ 주말)의 slot_forecast 줄 */
+        other: List<ForecastRow>,
+        otherWeekend: Boolean,
     ): PlaceUi {
         val byHour = rows.associateBy { it.hour }
+        val known = rows.any { it.status != "insufficient" }
+        val otherRecord = otherRecordOf(known, other, otherWeekend, slot?.hour ?: now.hour)
         val pickedRow = if (slot != null) {
             byHour[slot.hour]
         } else {
@@ -183,11 +195,13 @@ object PlaceRepository {
                 measured = measured,
                 estimated = pickedRow?.is_estimated == true,
                 at = slot?.let { "${it.hour}시" } ?: "지금",
-                known = rows.any { it.status != "insufficient" },
+                known = known,
+                other = otherRecord,
             ),
             walkMinutes = null,
             openNow = hours?.let { isOpen(it, openAt) },
-            recommendation = recommend(
+            // 이쪽 묶음엔 측정이 없고 반대쪽에만 있으면 그걸 먼저 알린다 (지도 카드 · 정보 부족 화면)
+            recommendation = otherRecord?.let { "${it.emptyGroupLabel}에 잰 기록은 아직 없어요" } ?: recommend(
                 byHour = byHour,
                 nowHour = if (slot == null) now.hour else null,
                 dayWord = when {
@@ -196,12 +210,34 @@ object PlaceRepository {
                     else -> "평일에는"
                 },
             ),
-            recommendationBasis = basis(rows, measured),
+            recommendationBasis = otherRecord?.let { "${it.slot.groupLabel}에는 ${it.count}번 쟀어요 · 상세 보기에서 ${it.slot.groupLabel} 기록을 볼 수 있어요" }
+                ?: basis(rows, measured, known),
             hours = if (rows.isEmpty()) emptyList() else CHART_HOURS.map { bar(it, byHour[it]) },
             areaCrowd = if (rows.isEmpty()) emptyList() else CHART_HOURS.map { byHour[it]?.area_crowd_level },
             measureCount = measured,
             slot = slot,
             areaDays = rows.maxOfOrNull { it.area_days } ?: 0,
+            kakaoId = row.kakao_id,
+            otherRecord = otherRecord,
+        )
+    }
+
+    /**
+     * 이쪽 묶음에 단계 · 후보가 한 칸도 없는데 반대쪽에는 잰 기록이 있으면 그 기록.
+     * 홍대 5곳은 주말에만 재서, 이게 없으면 평일 내내 "정보가 없어요" 로 보였다
+     */
+    private fun otherRecordOf(known: Boolean, other: List<ForecastRow>, weekend: Boolean, hour: Int): OtherRecord? {
+        val count = other.sumOf { it.measurement_count }
+        if (known || count == 0) return null
+        val measured = other.filter { it.measurement_count > 0 }
+        return OtherRecord(
+            slot = TimeSlot(weekend, measured.minBy { kotlin.math.abs(it.hour - hour) }.hour),
+            count = count,
+            summary = if (other.any { it.status == "level" }) {
+                recommend(other.associateBy { it.hour }, nowHour = null, dayWord = if (weekend) "주말에는" else "평일에는")
+            } else {
+                null
+            },
         )
     }
 
@@ -244,11 +280,13 @@ object PlaceRepository {
     /**
      * 목록 한 줄 설명. "지금 보통 · 직접 측정 3건" · "15시는 후보예요 · 직접 측정 1건".
      * 부담 높음은 측정이 모자라 추정이어도 알린다 (답변서2). 그때는 추정이라고 같이 적는다.
-     * [at] 은 "지금" 또는 고른 시각 "15시", [known] 은 그 날 점수가 한 칸이라도 있는지
+     * [at] 은 "지금" 또는 고른 시각 "15시", [known] 은 그 날 점수가 한 칸이라도 있는지.
+     * [other] 가 있으면(이쪽 묶음엔 측정이 없고 반대쪽엔 있으면) 정보가 없다고 하지 않고 어느 쪽에 있는지 말한다
      */
-    private fun describe(level: SensoryLevel, measured: Int, estimated: Boolean, at: String, known: Boolean): String {
+    private fun describe(level: SensoryLevel, measured: Int, estimated: Boolean, at: String, known: Boolean, other: OtherRecord?): String {
         val topic = if (at == "지금") "지금은" else "${at}는"
         return when {
+            other != null -> "${other.emptyGroupLabel} 측정이 아직 없어요 · ${other.slot.groupLabel} 측정 ${other.count}건"
             level == SensoryLevel.NO_DATA && !known -> "소리 · 빛 정보가 아직 없어요"
             level == SensoryLevel.NO_DATA -> "$topic 정보가 부족해요 · 직접 측정 ${measured}건"
             level == SensoryLevel.CANDIDATE -> "$topic 후보예요 · 직접 측정 ${measured}건"
@@ -263,7 +301,8 @@ object PlaceRepository {
      * [dayWord] 는 "오늘은" · "주말에는" · "평일에는". 오늘이 아닌 날은 [nowHour] 가 null 이라 지난 시각이 없다
      */
     private fun recommend(byHour: Map<Int, ForecastRow>, nowHour: Int?, dayWord: String): String {
-        if (byHour.isEmpty()) return "아직 측정이 부족해서 안내하기 어려워요"
+        // 칸이 있어도 전부 정보 부족이면 안내할 게 없다. 아래로 내려가면 "아직 추정만 있어요" 로 잘못 나온다
+        if (byHour.values.none { it.status != "insufficient" }) return "아직 측정이 부족해서 안내하기 어려워요"
         val calm = CHART_HOURS.filter { h ->
             byHour[h]?.let { it.status == "level" && it.level == "calm" && !it.is_estimated } == true
         }.toSet()
@@ -290,8 +329,8 @@ object PlaceRepository {
     private fun span(start: Int, end: Int): String = if (start == end) "${start}시" else "$start~${end}시"
 
     /** 결론 아래 작은 줄. 무엇을 근거로 했는지 */
-    private fun basis(rows: List<ForecastRow>, measured: Int): String = when {
-        rows.isEmpty() -> "이 장소의 소리 · 빛 정보가 아직 없어요"
+    private fun basis(rows: List<ForecastRow>, measured: Int, known: Boolean): String = when {
+        rows.isEmpty() || !known -> "이 장소의 소리 · 빛 정보가 아직 없어요"
         measured == 0 -> "주변 지역 혼잡으로 추정했어요"
         else -> "직접 측정한 기록 ${measured}건을 바탕으로 예측했어요"
     }

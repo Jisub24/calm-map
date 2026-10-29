@@ -22,6 +22,11 @@ import com.calmmap.ui.component.CalmIcon
 import com.calmmap.ui.component.CalmIcons
 import com.calmmap.ui.component.PlaceRow
 import com.calmmap.ui.component.TopBar
+import com.calmmap.data.KakaoPlaceRepository
+import com.calmmap.ui.search.KakaoPlaceRow
+import com.calmmap.ui.search.KakaoSectionTitle
+import com.calmmap.ui.search.SearchField
+import com.calmmap.ui.search.rememberKakaoSearch
 import com.calmmap.ui.model.ENOUGH_MEASURES
 import com.calmmap.ui.model.MEASURE_SECONDS
 import com.calmmap.ui.model.PlaceUi
@@ -37,17 +42,25 @@ import com.calmmap.ui.theme.caption
 /**
  * 측정할 장소 고르기. 지도의 '측정' 버튼에서 들어온다 (장소 상세에서는 장소가 정해져 있어 바로 측정 중으로).
  * 최종안 15-0. 검색 · 기록 화면과 같은 틀이다.
+ * 목록에 없는 가게는 위 검색칸으로 카카오에서 찾아 고른다. 저장할 때 그 가게가 지도에 생긴다.
+ * 검색어는 밖([query])에 둔다. 카카오 가게를 확인하러 지도에 갔다 돌아와도 남아 있게.
  */
-// TODO: 지금은 예시 장소를 가까운 순으로. 내 위치를 붙이면 실제 거리로
-// TODO: 목록에 없는 장소를 검색해서 측정하는 입구는 검색 화면과 함께 붙인다
+// TODO: 지금은 지도 장소를 가까운 순으로. 내 위치를 붙이면 실제 거리로
 @Composable
 fun MeasurePlaceScreen(
     onBack: () -> Unit,
     onPlaceClick: (PlaceUi) -> Unit,
     modifier: Modifier = Modifier,
     places: List<PlaceUi> = samplePlaces,
+    query: String = "",
+    onQueryChange: (String) -> Unit = {},
 ) {
-    val sorted = places.sortedBy { it.walkMinutes ?: Int.MAX_VALUE }
+    val q = query.trim()
+    val sorted = places
+        .filter { q.isEmpty() || it.name.contains(q) || it.category.contains(q) }
+        .sortedBy { it.walkMinutes ?: Int.MAX_VALUE }
+    val kakao = rememberKakaoSearch(query, places)
+    val showKakao = q.isNotEmpty() && KakaoPlaceRepository.enabled
 
     Column(
         modifier = modifier
@@ -64,8 +77,20 @@ fun MeasurePlaceScreen(
                 .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(text = "지금 위치 근처", style = MaterialTheme.typography.labelMedium, color = TextTertiary)
-            Column(
+            SearchField(
+                query = query,
+                onQueryChange = onQueryChange,
+                onBack = null,
+                autoFocus = false,
+            )
+            if (sorted.isNotEmpty()) {
+                Text(
+                    text = if (q.isEmpty()) "지금 위치 근처" else "지도에 있는 장소",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = TextTertiary,
+                )
+            }
+            if (sorted.isNotEmpty()) Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(Radius.card)
@@ -84,6 +109,21 @@ fun MeasurePlaceScreen(
                         onClick = { onPlaceClick(place) },
                         showDivider = i < sorted.lastIndex,
                     )
+                }
+            }
+
+            if (showKakao) {
+                KakaoSectionTitle(kakao)
+                if (kakao.places.isNotEmpty()) Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(Radius.card)
+                        .background(BgSurface)
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                ) {
+                    kakao.places.forEachIndexed { i, place ->
+                        KakaoPlaceRow(place, onMeasure = { onPlaceClick(place.toPlaceUi()) }, showDivider = i < kakao.places.lastIndex)
+                    }
                 }
             }
         }

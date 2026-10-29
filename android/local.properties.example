@@ -17,4 +17,9 @@ NAVER_MAP_CLIENT_ID=
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 
+# 카카오 REST API 키 — 장소 검색. batch/.env 의 KAKAO_REST_KEY 와 같은 값
+#   https://developers.kakao.com → 내 애플리케이션 → 앱 키 → REST API 키
+#   비워 두면 검색에 카카오 결과가 안 나오고 지도에 있는 장소만 나옵니다
+KAKAO_REST_KEY=
+
 # service key 는 앱에 넣지 않습니다 (CLAUDE.md 원칙 7)

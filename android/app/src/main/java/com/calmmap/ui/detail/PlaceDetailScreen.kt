@@ -49,13 +49,16 @@ import com.calmmap.ui.component.FrequencyMeter
 import com.calmmap.ui.component.FullSegmented
 import com.calmmap.ui.component.HourlyBarChart
 import com.calmmap.ui.component.InfoButton
+import com.calmmap.ui.component.InfoNote
 import com.calmmap.ui.component.LevelBadge
 import com.calmmap.ui.component.PrimaryButton
 import com.calmmap.ui.component.ButtonSize
 import com.calmmap.ui.component.SecondaryButton
 import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.component.outlineBorder
+import com.calmmap.ui.model.LightInfo
 import com.calmmap.ui.model.PlaceDetailUi
+import com.calmmap.ui.model.MEASURE_NOW_ONLY
 import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.ScoreBreakdown
 import com.calmmap.ui.model.SoundRow
@@ -179,20 +182,22 @@ fun PlaceDetailScreen(
                 detail == null -> LoadingCard()
                 tab == DetailTab.SCORE -> ScoreCard(detail.score)
                 tab == DetailTab.SOUND -> SoundCard(detail.sounds, detail.measureCount)
-                tab == DetailTab.LIGHT -> LightCard(detail)
+                tab == DetailTab.LIGHT -> LightCard(detail.light)
                 else -> BusinessCard(detail)
             }
         }
 
-        BottomCta {
-            SecondaryButton(text = "이 장소 측정", onClick = onMeasureClick, modifier = Modifier.weight(1f))
+        // 시간 선택 중에는 측정을 막는다
+        val measureLocked = place.slot != null
+        BottomCta(note = if (measureLocked) MEASURE_NOW_ONLY else null) {
+            SecondaryButton(text = "이 장소 측정", onClick = onMeasureClick, enabled = !measureLocked, modifier = Modifier.weight(1f))
             PrimaryButton(text = "이 시간에 방문", onClick = onVisitClick, modifier = Modifier.weight(1f))
         }
     }
 }
 
 @Composable
-private fun LoadingCard() {
+internal fun LoadingCard() {
     DetailCard {
         Text(text = "불러오는 중…", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
     }
@@ -200,7 +205,7 @@ private fun LoadingCard() {
 
 /** 탭 값을 못 읽었을 때. 계속 '불러오는 중' 으로 두면 기다려야 하는지 알 수 없다 */
 @Composable
-private fun FailedCard(onRetry: () -> Unit) {
+internal fun FailedCard(onRetry: () -> Unit) {
     DetailCard {
         Text(text = "정보를 불러오지 못했어요", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
         SecondaryButton(text = "다시 시도", onClick = onRetry, size = ButtonSize.M, modifier = Modifier.fillMaxWidth())
@@ -229,12 +234,10 @@ private fun CardTitle(title: String, trailing: String? = null, info: String? = n
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(text = title, style = MaterialTheme.typography.titleMedium, color = TextPrimary, modifier = Modifier.weight(1f))
             if (trailing != null) Text(text = trailing, style = MaterialTheme.typography.caption, color = TextTertiary)
-            if (info != null) InfoButton(onClick = { showInfo = !showInfo }, modifier = Modifier.size(28.dp))
+            if (info != null) InfoButton(open = showInfo, onClick = { showInfo = !showInfo })
         }
         // ⓘ 를 누르면 제목 아래에 설명을 펼친다
-        if (info != null && showInfo) {
-            Text(text = info, style = MaterialTheme.typography.caption, color = TextSecondary)
-        }
+        if (info != null && showInfo) InfoNote(info)
     }
 }
 
@@ -475,9 +478,9 @@ private fun factorIcon(label: String): CalmIcons = when {
 // ── 소리 ────────────────────────────────────────────────
 
 @Composable
-private fun SoundCard(sounds: List<SoundRow>, measureCount: Int?) {
+internal fun SoundCard(sounds: List<SoundRow>, measureCount: Int?, info: String? = null) {
     DetailCard {
-        CardTitle(title = "이 장소에서 들리는 소리", trailing = measureCount?.let { "측정 ${it}회" })
+        CardTitle(title = "이 장소에서 들리는 소리", trailing = measureCount?.let { "측정 ${it}회" }, info = info)
         if (sounds.isEmpty()) {
             Text(text = "아직 소리 측정이 없어요", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
             return@DetailCard
@@ -546,11 +549,14 @@ private fun frequencyOf(value: String): Int = when {
 
 // ── 빛 ─────────────────────────────────────────────────
 
+/**
+ * 빛 카드. 장소 상세 빛 탭과 정보 부족 화면이 같이 쓴다.
+ * 밝기는 장소 고유값이라(답변서2 질의1) 평일 · 주말 · 시각과 상관없이 같은 값이다
+ */
 @Composable
-private fun LightCard(detail: PlaceDetailUi) {
-    val light = detail.light
+internal fun LightCard(light: LightInfo?) {
     DetailCard {
-        CardTitle(title = "빛")
+        CardTitle(title = "빛", info = "밝기는 평일 · 주말 · 시간과 상관없이 이 장소에서 잰 모든 측정의 가운데 값이에요.")
         if (light == null) {
             Text(text = "아직 빛 측정이 없어요", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
             return@DetailCard
@@ -568,7 +574,8 @@ private fun LightCard(detail: PlaceDetailUi) {
                         modifier = Modifier.padding(bottom = 4.dp),
                     )
                 }
-                LevelBadge(level = light.luxLevel, modifier = Modifier.padding(top = 4.dp))
+                // 밝기 점수를 아직 못 냈으면 배지를 빼고 숫자만 둔다. '정보 부족' 배지가 붙으면 밝기를 모르는 것처럼 읽힌다
+                if (light.luxLevel != SensoryLevel.NO_DATA) LevelBadge(level = light.luxLevel, modifier = Modifier.padding(top = 4.dp))
             }
             LightTile(icon = CalmIcons.Bolt, label = "깜빡임", measured = light.flickerMeasured, modifier = Modifier.weight(1f).fillMaxHeight()) {
                 Text(

@@ -31,6 +31,8 @@ import com.calmmap.ui.measure.MeasureResultScreen
 import com.calmmap.ui.measure.MeasuringScreen
 import com.calmmap.ui.model.MeasureResult
 import com.calmmap.ui.model.PlaceUi
+import com.calmmap.ui.map.PlaceConfirmScreen
+import com.calmmap.ui.model.MEASURE_NOW_ONLY
 import com.calmmap.ui.model.TimeSlot
 import com.calmmap.ui.model.VisitPlan
 import com.calmmap.ui.model.VisitUi
@@ -67,6 +69,8 @@ private enum class Screen {
     VISIT_TIME, VISIT_CARD, VISIT_CHILD, VISIT_ONSITE, VISIT_AFTER, VISIT_PLANS,
     // 측정 흐름: (장소 선택) → 측정 중 → 측정 결과
     MEASURE_PLACE, MEASURE_RUN, MEASURE_RESULT,
+    // 검색에서 고른 카카오 가게가 맞는지 지도에서 확인 → 측정 중
+    PLACE_CONFIRM,
 }
 
 /**
@@ -100,7 +104,8 @@ fun CalmMapApp(
     var detailRetry by remember { mutableIntStateOf(0) }
     // 상세 화면에 들어올 때마다 새로 읽는다. 장소가 바뀔 때만 읽으면, 같은 장소를 다시 열었을 때 예전 값이 남는다.
     // 지도에서 시간을 골랐으면 쌓인 평일/주말 기록의 그 시각 기준으로 읽는다
-    LaunchedEffect(detailPlace?.id, screen == Screen.DETAIL, detailRetry) {
+    // 같은 장소라도 고른 때(평일 · 주말)가 바뀌면 다시 읽는다 ("주말 기록 보기")
+    LaunchedEffect(detailPlace?.id, detailPlace?.slot, screen == Screen.DETAIL, detailRetry) {
         if (screen != Screen.DETAIL) return@LaunchedEffect
         detail = null
         detailFailed = false
@@ -247,13 +252,37 @@ fun CalmMapApp(
     var measureResult by remember { mutableStateOf<MeasureResult?>(null) }
     var measureFrom by remember { mutableStateOf(Screen.MAP) }
 
-    // 장소 상세에서는 장소가 정해져 있어서 바로 측정 중으로
-    fun startMeasure(place: PlaceUi?) {
+    // 검색어. 고른 가게가 아니라서 돌아오면 치던 글자가 남아 있게 여기 둔다. 지도로 돌아가면 비운다
+    var searchQuery by remember { mutableStateOf("") }
+    var measureQuery by remember { mutableStateOf("") }
+    LaunchedEffect(screen == Screen.MAP) {
+        if (screen == Screen.MAP) {
+            searchQuery = ""
+            measureQuery = ""
+        }
+    }
+    // 검색에서 고른 카카오 가게와, '아니에요' 를 누르면 돌아갈 곳 (검색 또는 측정 장소 고르기)
+    var confirmPlace by remember { mutableStateOf<PlaceUi?>(null) }
+    var confirmFrom by remember { mutableStateOf(Screen.SEARCH) }
+
+    fun openConfirm(place: PlaceUi) {
+        confirmFrom = screen
+        confirmPlace = place
+        screen = Screen.PLACE_CONFIRM
+    }
+
+    // 장소 상세에서는 장소가 정해져 있어서 바로 측정 중으로. [from] 은 측정을 끝내거나 그만두면 돌아갈 곳
+    fun startMeasure(place: PlaceUi?, from: Screen = screen) {
         if (isGuest) {
             loginSheet = true
             return
         }
-        measureFrom = screen
+        // 시간 선택 중에는 측정하지 않는다. 상세는 그 장소를 연 때, 지도는 지금 고른 때를 본다
+        if ((if (place != null) place.slot else mapSlot) != null) {
+            Toast.makeText(context, "$MEASURE_NOW_ONLY. 위쪽 '지금'을 눌러 주세요", Toast.LENGTH_SHORT).show()
+            return
+        }
+        measureFrom = from
         measurePlace = place
         screen = if (place == null) Screen.MEASURE_PLACE else Screen.MEASURE_RUN
     }
@@ -283,6 +312,7 @@ fun CalmMapApp(
             // 측정 중에 뒤로 가면 측정을 버린다. 지도에서 시작했으면 장소 선택으로
             Screen.MEASURE_RUN -> if (measureFrom == Screen.MAP) Screen.MEASURE_PLACE else measureFrom
             Screen.MEASURE_PLACE, Screen.MEASURE_RESULT -> measureFrom
+            Screen.PLACE_CONFIRM -> confirmFrom
             Screen.VISIT_CHILD, Screen.VISIT_ONSITE -> Screen.VISIT_CARD
             else -> Screen.MAP
         }
@@ -314,6 +344,9 @@ fun CalmMapApp(
                 places = places.orEmpty(),
                 onBack = { screen = Screen.MAP },
                 onPlaceClick = { openDetail(it) },
+                onMeasureClick = { openConfirm(it) },
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
             )
 
             Screen.HISTORY -> VisitHistoryScreen(
@@ -474,10 +507,31 @@ fun CalmMapApp(
                 places = places.orEmpty(),
                 onBack = { screen = measureFrom },
                 onPlaceClick = {
-                    measurePlace = it
-                    screen = Screen.MEASURE_RUN
+                    // 카카오 가게는 지도에서 맞는지 먼저 본다. 지도에 있는 장소는 바로 측정
+                    if (it.kakao != null) {
+                        openConfirm(it)
+                    } else {
+                        measurePlace = it
+                        screen = Screen.MEASURE_RUN
+                    }
                 },
+                query = measureQuery,
+                onQueryChange = { measureQuery = it },
             )
+
+            Screen.PLACE_CONFIRM -> {
+                val place = confirmPlace
+                if (place == null) {
+                    screen = confirmFrom
+                } else {
+                    PlaceConfirmScreen(
+                        place = place,
+                        // 측정 장소 고르기에서 왔으면 측정을 그만둘 때 그 화면의 원래 규칙(지도에서 왔으면 장소 고르기)을 따른다
+                        onMeasure = { startMeasure(place, from = if (confirmFrom == Screen.MEASURE_PLACE) measureFrom else confirmFrom) },
+                        onBack = { screen = confirmFrom },
+                    )
+                }
+            }
 
             Screen.MEASURE_RUN -> {
                 val place = measurePlace
@@ -507,9 +561,15 @@ fun CalmMapApp(
                         // DB 에 들어간 뒤에야 화면을 나간다. 실패하면 결과 화면이 알리고 그대로 남는다
                         onSave = { saved ->
                             MeasurementRepository.save(saved)
-                            Toast.makeText(context, "측정을 저장했어요", Toast.LENGTH_SHORT).show()
+                            // 카카오 검색에서 고른 가게는 이번 저장으로 지도에 처음 생긴다. 지도로 가서 마커를 보여준다
+                            val added = saved.place.kakao != null
+                            Toast.makeText(
+                                context,
+                                if (added) "측정을 저장했어요. 지도에 장소가 생겼어요" else "측정을 저장했어요",
+                                Toast.LENGTH_SHORT,
+                            ).show()
                             measureResult = null
-                            screen = measureFrom
+                            screen = if (added) Screen.MAP else measureFrom
                         },
                         onDiscard = {
                             measureResult = null
@@ -533,6 +593,13 @@ fun CalmMapApp(
                         info = noData,
                         onBack = { screen = Screen.MAP },
                         onMeasureClick = { startMeasure(place) },
+                        // 지도는 '지금' 그대로 두고 상세만 그 묶음 기록으로 연다
+                        onOtherRecordClick = { slot ->
+                            mapPlaces?.at(slot)?.firstOrNull { it.id == place.id }?.let { openDetail(it) }
+                        },
+                        detail = detail,
+                        detailFailed = detailFailed,
+                        onRetry = { detailRetry++ },
                     )
 
                     else -> PlaceDetailScreen(

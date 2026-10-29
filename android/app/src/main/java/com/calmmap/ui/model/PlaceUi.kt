@@ -40,18 +40,42 @@ data class PlaceUi(
     val slot: TimeSlot? = null,
     /** 고른 때의 주변 혼잡을 낸 날 수. "지난 주말 N일 기록이에요" */
     val areaDays: Int = 0,
+    /** places.kakao_id. 카카오 검색 결과에서 이미 있는 가게를 뺄 때 쓴다 */
+    val kakaoId: String? = null,
+    /** 아직 DB 에 없는 카카오 가게면 그 정보 (id 는 0). 측정을 저장할 때 places 에 먼저 넣는다 */
+    val kakao: KakaoPlace? = null,
+    /** 지금 보는 묶음(평일 · 주말)에는 측정이 없고 다른 묶음에만 있을 때 그 기록. 정보 부족 화면에서 "주말 기록 보기" */
+    val otherRecord: OtherRecord? = null,
 ) {
     /** 그 날 점수가 한 칸이라도 있는지. 없으면 카드 대신 정보 부족 화면으로 보낸다 */
     val hasForecast: Boolean
         get() = hours.any { it.level != null }
 
-    /** 카드 · 상세 제목 아래 한 줄. "카페 · 도보 6분 · 영업 중". 모르는 것은 뺀다 */
+    /**
+     * 카드 · 상세 제목 아래 한 줄. "카페 · 도보 6분 · 영업 중". 모르는 것은 뺀다.
+     * 영업시간은 빼지 않고 모른다고 적는다. 앱 검색으로 넣은 곳은 그래프를 8~22시로 그려서, 그 시간에 연다고 오해하지 않게
+     */
     val infoLine: String
         get() = buildList {
             add(category)
             walkMinutes?.let { add("도보 ${it}분") }
-            openNow?.let { add(if (it) "영업 중" else "영업 종료") }
+            add(openNow?.let { if (it) "영업 중" else "영업 종료" } ?: "영업시간 정보 없음")
         }.joinToString(" · ")
+}
+
+/**
+ * 다른 묶음(평일 · 주말)에 잰 기록. 평일과 주말은 붐비는 정도가 달라서 그 값을 이쪽 점수로 쓰지 않고 따로 보여준다.
+ * [slot] 은 "주말 기록 보기" 를 누르면 열 때. 그 묶음에서 지금과 가장 가까운, 실제로 잰 시각이다
+ */
+data class OtherRecord(
+    val slot: TimeSlot,
+    /** 그 묶음 측정 횟수 */
+    val count: Int,
+    /** "주말에는 15~16시가 무던해요". 단계가 확정된 칸이 없으면 null */
+    val summary: String?,
+) {
+    /** 측정이 없는 쪽(지금 보는 묶음) 이름 */
+    val emptyGroupLabel: String get() = if (slot.weekend) "평일" else "주말"
 }
 
 /**

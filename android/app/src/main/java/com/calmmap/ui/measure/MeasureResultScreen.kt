@@ -4,11 +4,7 @@ import android.util.Log
 import com.calmmap.data.brief
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.semantics.Role
-import com.calmmap.ui.component.pressHighlight
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
@@ -16,6 +12,8 @@ import androidx.compose.ui.text.style.TextAlign
 import com.calmmap.ui.component.CalmIcon
 import com.calmmap.ui.component.CalmIcons
 import com.calmmap.ui.component.GhostButton
+import com.calmmap.ui.component.InfoButton
+import com.calmmap.ui.component.InfoNote
 import com.calmmap.ui.theme.BgCanvas
 import com.calmmap.ui.theme.BrandPrimary
 import com.calmmap.ui.theme.BrandPrimarySoft
@@ -60,6 +58,7 @@ import com.calmmap.ui.theme.BgSurface
 import com.calmmap.ui.theme.BgSubtle
 import com.calmmap.ui.theme.StatusCaution
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -109,29 +108,12 @@ fun MeasureResultScreen(
                 // 단계 · 점수는 여기서 안 보여준다. 소리 크기만으로 붙이면 틀린 안내가 된다. 점수는 저장 뒤 서버가 낸다
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(text = "이번 측정", style = MaterialTheme.typography.labelLarge, color = TextSecondary, modifier = Modifier.weight(1f))
-                    // 아이콘은 20 이지만 누르는 영역은 32
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .pressHighlight(shape = Radius.pill, role = Role.Button, onClick = { showHint = !showHint }),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CalmIcon(CalmIcons.Info, size = 20.dp, tint = if (showHint) BrandPrimary else TextTertiary, contentDescription = "숫자 설명")
-                    }
+                    InfoButton(open = showHint, onClick = { showHint = !showHint }, contentDescription = "숫자 설명")
                 }
                 Text(text = whenLabel(result) + " · 소리 크기 ${result.db} dB", style = MaterialTheme.typography.caption, color = TextTertiary)
                 if (showHint) {
                     // 칸의 숫자는 점수가 아니다. 그 소리가 얼마나 자주 · 또렷하게 들렸는지(YAMNet 확신도 평균)를 0~100 으로 보여준다
-                    Text(
-                        text = "숫자는 점수가 아니에요. 측정하는 동안 그 소리가 얼마나 자주, 또렷하게 들렸는지 나타내요. 100에 가까울수록 자주 들린 소리예요.",
-                        style = MaterialTheme.typography.caption,
-                        color = BrandPrimary,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(Radius.tile)
-                            .background(BrandPrimarySoft)
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                    )
+                    InfoNote("숫자는 점수가 아니에요. 측정하는 동안 그 소리가 얼마나 자주, 또렷하게 들렸는지 나타내요. 100에 가까울수록 자주 들린 소리예요.")
                 }
                 top.chunked(2).forEach { pair ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -291,7 +273,7 @@ private fun MeasureResultScreenPreview() {
                 db = 66,
                 sounds = sampleSoundBase,
                 rawLabels = mapOf("Speech" to 0.48f, "Music" to 0.21f),
-                endedAt = LocalDateTime.now(),
+                endedAt = LocalDateTime.now(ZoneId.of("Asia/Seoul")),
                 seconds = 60,
             ),
             onSave = {},

@@ -55,6 +55,7 @@ import com.calmmap.ui.component.bottomLine
 import com.calmmap.ui.component.outlineBorder
 import com.calmmap.ui.component.pressFade
 import com.calmmap.ui.component.pressHighlight
+import com.calmmap.data.KakaoPlaceRepository
 import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.samplePlaces
 import com.calmmap.ui.theme.TextPrimary
@@ -66,9 +67,10 @@ import com.calmmap.ui.theme.SensoryLevel
 /**
  * 와이어프레임 B3 검색 화면.
  *
- * 우리가 가진 장소 안에서 이름 · 업종으로 찾는다.
- * 전국 아무 가게나 찾는 것이 아니다. 측정하지 않은 곳은 보여줘도
- * '정보 부족' 밖에 쓸 말이 없기 때문이다.
+ * 위쪽은 우리 지도에 있는 장소를 이름 · 업종으로 찾은 것, 아래쪽은 카카오 장소 검색 결과다.
+ * 카카오 결과는 측정 기록이 없어 보여줄 점수가 없으니 누르면 그 가게에서 측정하러 간다 ([onMeasureClick]).
+ * 측정을 저장하면 그 가게가 지도에 생긴다.
+ * 검색어는 밖([query])에 둔다. 고른 가게가 아니라서 돌아왔을 때 치던 글자가 남아 있게.
  */
 @Composable
 fun SearchScreen(
@@ -76,8 +78,10 @@ fun SearchScreen(
     onPlaceClick: (PlaceUi) -> Unit,
     modifier: Modifier = Modifier,
     places: List<PlaceUi> = samplePlaces,
+    onMeasureClick: (PlaceUi) -> Unit = {},
+    query: String = "",
+    onQueryChange: (String) -> Unit = {},
 ) {
-    var query by remember { mutableStateOf("") }
     var onlyCalm by remember { mutableStateOf(true) }
     var nearestFirst by remember { mutableStateOf(false) }
     var onlyOpen by remember { mutableStateOf(false) }
@@ -92,6 +96,8 @@ fun SearchScreen(
             .filter { !onlyOpen || it.openNow == true }
             .sortedBy { if (nearestFirst) it.walkMinutes ?: Int.MAX_VALUE else it.level.ordinal }
     }
+    val kakao = rememberKakaoSearch(query, places)
+    val showKakao = query.isNotBlank() && KakaoPlaceRepository.enabled
 
     Column(
         modifier = modifier
@@ -103,7 +109,7 @@ fun SearchScreen(
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            SearchField(query = query, onQueryChange = { query = it }, onBack = onBack)
+            SearchField(query = query, onQueryChange = onQueryChange, onBack = onBack)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(label = "무던한 시간 있는 곳", selected = onlyCalm, onClick = { onlyCalm = !onlyCalm })
                 FilterChip(label = "가까운 순", selected = nearestFirst, onClick = { nearestFirst = !nearestFirst })
@@ -120,7 +126,8 @@ fun SearchScreen(
         ) {
             item {
                 Text(
-                    text = "검색 결과 ${results.size}",
+                    // 아래에 카카오 결과가 따로 붙으면 위쪽이 무엇인지 나눠 부른다
+                    text = (if (showKakao) "지도에 있는 장소 " else "검색 결과 ") + results.size,
                     style = MaterialTheme.typography.labelMedium,
                     color = TextTertiary,
                     modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
@@ -151,6 +158,13 @@ fun SearchScreen(
                 )
             }
 
+            if (showKakao) {
+                item { KakaoSectionTitle(kakao, Modifier.padding(top = 20.dp, bottom = 6.dp)) }
+                items(kakao.places, key = { "kakao-${it.id}" }) { place ->
+                    KakaoPlaceRow(place, onMeasure = { onMeasureClick(place.toPlaceUi()) })
+                }
+            }
+
             item {
                 Row(
                     modifier = Modifier
@@ -179,14 +193,16 @@ fun SearchScreen(
  * 화면에 들어오면 바로 글자판이 올라오게 해서 한 번 더 누르지 않게 한다.
  */
 @Composable
-private fun SearchField(
+internal fun SearchField(
     query: String,
     onQueryChange: (String) -> Unit,
-    onBack: () -> Unit,
+    /** null 이면 뒤로 가기 대신 돋보기를 둔다 (측정 장소 고르기처럼 위에 뒤로 가기가 따로 있을 때) */
+    onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    autoFocus: Boolean = true,
 ) {
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(Unit) { if (autoFocus) focusRequester.requestFocus() }
 
     Row(
         modifier = modifier
@@ -199,13 +215,19 @@ private fun SearchField(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .pressHighlight(shape = Radius.pill, role = Role.Button, onClick = onBack),
-            contentAlignment = Alignment.Center,
-        ) {
-            CalmIcon(CalmIcons.ArrowLeft, contentDescription = "뒤로")
+        if (onBack != null) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .pressHighlight(shape = Radius.pill, role = Role.Button, onClick = onBack),
+                contentAlignment = Alignment.Center,
+            ) {
+                CalmIcon(CalmIcons.ArrowLeft, contentDescription = "뒤로")
+            }
+        } else {
+            Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                CalmIcon(CalmIcons.Search, size = 20.dp, tint = TextTertiary)
+            }
         }
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (query.isEmpty()) {
