@@ -17,26 +17,29 @@
        후보라도 점수가 부담 높음이면 '부담 높음' 으로 표시한다 (점선은 그대로).
          답변서2 질의1: '무던함' 은 실측으로 확인된 시간대에만, '부담 높음' 주의는 추정이어도 표시.
          표에는 status='level' · level='high' · is_estimated=true 로 쓴다
-    5. 실측 없는 칸은 지역 혼잡 예측의 "모양"을 빌려 추정한다 (답변서 질의 2)
+    5. 실측 없는 칸은 지역 혼잡 예측의 "모양"을 빌려 추정한다 (답변서2 질의1)
          실측이 있었던 시각의 지역 혼잡 단계와 점수를 짝지어 두고,
          추정할 시각의 혼잡 예측 단계가 그 사이에 들어오면 직선으로 잇는다.
          범위 밖이면 지어내지 않고 정보 부족.
+         시각마다 바뀌는 건 장소 혼잡 · 소리 크기뿐이다. 밝기 · 소리 종류(배경음악 · 안내방송)는
+         장소 고유값이라 그 장소 측정 전체의 중앙값으로 고정한다
     6. 칸마다 지역 혼잡 1~4 를 붙인다 (선 그래프용. 점수에는 안 들어간다)
 
-오늘만이 아니라 평일 · 주말 중 오늘이 아닌 쪽의 가장 가까운 날도 같이 쓴다.
-    앱 지도의 '시간 선택' 에서 그쪽을 고르면 그 날 줄을 읽는다.
-    평일이면 다가오는 토요일, 주말이면 다가오는 월요일. 혼잡 예측은 12시간 앞까지라
-    그 날은 실측이 있는 칸만 채워지고 나머지는 정보 부족이다.
+slot_forecast — 지도 '시간 선택' 용. 날짜 없이 장소 × 평일/주말 × 시각 (026)
+    점수     위 2~4 와 같다. 빈 칸은 채우지 않는다 (그날의 혼잡 예측이 없다)
+    주변 혼잡 congestion 실측을 그 묶음 날들에서 같은 시각끼리 모은 중앙값.
+             하루 한 값(같은 시각 두 값이면 더 붐빈 쪽), 두 단계 사이면 올림(낮게 안내하지 않게)
 
 실행
-    python batch/forecast.py                          오늘 + 다른 쪽 가장 가까운 날 (한국 시각) · DB 측정으로 · 저장
-    python batch/forecast.py --date 2026-10-27        그 날짜 하나만
+    python batch/forecast.py                          오늘(한국 시각) + slot_forecast · DB 측정으로 · 저장
+    python batch/forecast.py --date 2026-10-27        hourly_forecast 를 그 날짜로
     python batch/forecast.py --sheet analysis/측정결과.csv --dry-run
                                                       답사 녹음 분석 결과로 돌려 보고 저장은 안 함
 """
 
 import argparse
 import csv
+import math
 import statistics
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
@@ -50,6 +53,10 @@ ROOT = Path(__file__).resolve().parent.parent
 RECORD_SHEET = ROOT / "analysis/측정기록.csv"
 
 FACTORS = ("loudness", "sound", "light", "crowd")
+GROUPS = ("weekday", "weekend")
+GROUP_WEEKDAYS = {"weekday": (1, 2, 3, 4, 5), "weekend": (6, 7)}
+# 장소 고유값 (답변서2 질의1). 보간 칸에서도 시각마다 바꾸지 않는다
+PLACE_FIXED = ("light", "sound")
 
 
 # -----------------------------------------------------
@@ -63,16 +70,6 @@ def parse_ts(s):
 def weekday_group(d):
     """평일 / 주말. 장소당 측정이 적어 요일별로는 칸을 못 채운다 (답변서 질의 2)."""
     return "weekend" if d.isoweekday() >= 6 else "weekday"
-
-
-def other_group_day(d):
-    """평일 · 주말 중 d 가 아닌 쪽의 가장 가까운 날. 평일이면 다가오는 토요일, 주말이면 다가오는 월요일.
-
-    앱(PlaceRepository.otherGroupDay)이 같은 날을 읽으니 둘을 같이 고친다.
-    """
-    if weekday_group(d) == "weekday":
-        return d + timedelta(days=6 - d.isoweekday())
-    return d + timedelta(days=8 - d.isoweekday())
 
 
 def open_hours(hours_row):
@@ -144,6 +141,27 @@ def load_congestion(area_cds, since):
     return table
 
 
+def load_area_history(area_cds):
+    """지역 혼잡 실측 전부 → {(area, 평일/주말, 시각): (대표 단계, 날 수)}. slot_forecast 의 주변 혼잡.
+
+    같은 날 같은 시각에 두 번 받았으면 더 붐빈 쪽을 그날 값으로 하고,
+    날들의 중앙값이 두 단계 사이(2.5)면 올린다. 낮게 안내하지 않으려는 것.
+    """
+    rows = select_all("congestion", {
+        "select": "area_cd,target_at,level",
+        "area_cd": "in.(" + ",".join(area_cds) + ")", "is_forecast": "eq.false", "order": "target_at",
+    })
+    per_day = {}
+    for r in rows:
+        t = parse_ts(r["target_at"]).astimezone(KST)
+        key = (r["area_cd"], t.date(), t.hour)
+        per_day[key] = max(per_day.get(key, 0), r["level"])
+    by = defaultdict(list)
+    for (area, d, h), level in per_day.items():
+        by[(area, weekday_group(d), h)].append(level)
+    return {k: (math.ceil(statistics.median(v)), len(v)) for k, v in by.items()}
+
+
 # -----------------------------------------------------
 # 칸 채우기
 # -----------------------------------------------------
@@ -154,18 +172,32 @@ def slot_hour(m):
     return mid.hour
 
 
-def median_scores(scored):
-    """칸 안의 측정 점수들 → 항목별 중앙값, 종합 = 중앙값들의 최댓값."""
-    out = {}
-    for f in FACTORS:
-        vals = [r[f"score_{f}"] for r in scored if r[f"score_{f}"] is not None]
-        out[f"score_{f}"] = statistics.median(vals) if vals else None
+def with_total(out):
+    """항목 점수 → 종합(최댓값) · 주 요인. 소리 크기 · 소리 종류가 둘 다 없으면 종합을 내지 않는다."""
     present = {f: out[f"score_{f}"] for f in FACTORS if out[f"score_{f}"] is not None}
     if out["score_loudness"] is None and out["score_sound"] is None:
         out["total_score"], out["main_factor"] = None, None
     else:
         main = max(present, key=present.get)
         out["total_score"], out["main_factor"] = present[main], main
+    return out
+
+
+def median_scores(scored):
+    """칸 안의 측정 점수들 → 항목별 중앙값, 종합 = 중앙값들의 최댓값."""
+    out = {}
+    for f in FACTORS:
+        vals = [r[f"score_{f}"] for r in scored if r[f"score_{f}"] is not None]
+        out[f"score_{f}"] = statistics.median(vals) if vals else None
+    return with_total(out)
+
+
+def place_fixed(scored_place):
+    """장소 고유값 — 밝기 · 소리 종류. 그 장소 측정 전체(평일 · 주말 모두)의 중앙값 (답변서2 질의1)."""
+    out = {}
+    for f in PLACE_FIXED:
+        vals = [r[f"score_{f}"] for r in scored_place if r[f"score_{f}"] is not None]
+        out[f"score_{f}"] = statistics.median(vals) if vals else None
     return out
 
 
@@ -216,17 +248,11 @@ def interpolate(points, c_target):
     for f in FACTORS:
         x, y = a[f"score_{f}"], b[f"score_{f}"]
         out[f"score_{f}"] = None if x is None or y is None else x + (y - x) * w
-    present = {f: out[f"score_{f}"] for f in FACTORS if out[f"score_{f}"] is not None}
-    main = max(present, key=present.get)
-    out["total_score"], out["main_factor"] = present[main], main
-    return out
+    return with_total(out)
 
 
-def build_rows(target_date, places, hours_by_place, measurements, congestion, s):
-    group = weekday_group(target_date)
-    weekday = target_date.isoweekday()
-    rows = []
-
+def score_all(measurements, s):
+    """측정마다 점수 · 칸(평일/주말 · 시각)을 붙인다. 1분 미만 같은 버리는 측정은 빠진다."""
     scored = []
     for m in measurements:
         r = score_measurement(m, s)
@@ -236,12 +262,26 @@ def build_rows(target_date, places, hours_by_place, measurements, congestion, s)
         r["duration_sec"] = m["duration_sec"]; r["hour"] = slot_hour(m)
         r["group"] = weekday_group(m["measured_at"].astimezone(KST))
         scored.append(r)
+    return scored
+
+
+def round_scores(row):
+    for k in ("total_score",) + tuple(f"score_{f}" for f in FACTORS):
+        if row[k] is not None:
+            row[k] = round(row[k], 1)
+
+
+def build_rows(target_date, places, hours_by_place, scored, congestion, s):
+    group = weekday_group(target_date)
+    weekday = target_date.isoweekday()
+    rows = []
 
     for p in places:
         pid, area = p["id"], p["congestion_area_cd"]
         hours = open_hours(hours_by_place.get((pid, weekday)))
         # 같은 요일 묶음(평일 / 주말)의 측정만 쓴다. 시연 장소 예외(022)는 없앴다 (025)
         mine = [r for r in scored if r["place_id"] == pid and r["group"] == group]
+        fixed = place_fixed([r for r in scored if r["place_id"] == pid])
         by_hour = defaultdict(list)
         for r in mine:
             by_hour[r["hour"]].append(r)
@@ -274,14 +314,52 @@ def build_rows(target_date, places, hours_by_place, measurements, congestion, s)
             else:
                 agg = interpolate(points, area_level)
                 if agg:
+                    agg = with_total({**agg, **fixed})   # 밝기 · 소리 종류는 장소 고유값
                     row.update(agg); status, level, est = estimated(level_of(agg["total_score"], s))
                 else:
                     status, level, est = "insufficient", None, False
             row.update({"status": status, "level": level, "is_estimated": est})
-            for k in ("total_score",) + tuple(f"score_{f}" for f in FACTORS):
-                if row[k] is not None:
-                    row[k] = round(row[k], 1)
+            round_scores(row)
             rows.append(row)
+    return rows
+
+
+def group_hours(hours_by_place, pid, group):
+    """그 묶음 요일 중 하루라도 여는 시각. 지금 장소들은 묶음 안 요일끼리 영업시간이 같다."""
+    return sorted({h for d in GROUP_WEEKDAYS[group] for h in open_hours(hours_by_place.get((pid, d)))})
+
+
+def build_slot_rows(places, hours_by_place, scored, area_history, s):
+    """slot_forecast 줄. 날짜 없이 장소 × 평일/주말 × 시각. 측정한 칸만 점수, 빈 칸은 정보 부족."""
+    rows = []
+    computed_at = datetime.now(KST).isoformat()
+    for p in places:
+        pid, area = p["id"], p["congestion_area_cd"]
+        for group in GROUPS:
+            by_hour = defaultdict(list)
+            for r in scored:
+                if r["place_id"] == pid and r["group"] == group:
+                    by_hour[r["hour"]].append(r)
+            for h in group_hours(hours_by_place, pid, group):
+                area_level, area_days = area_history.get((area, group, h), (None, 0))
+                row = {"place_id": pid, "day_group": group, "hour": h,
+                       "area_crowd_level": area_level, "area_days": area_days,
+                       "measurement_count": 0, "last_measured_at": None, "computed_at": computed_at,
+                       "total_score": None, "main_factor": None}
+                for f in FACTORS:
+                    row[f"score_{f}"] = None
+                got = by_hour.get(h)
+                if got:
+                    agg = median_scores(got)
+                    status, level, est = judge(len(got), sum(r["duration_sec"] for r in got), agg["total_score"], s)
+                    row.update(agg)
+                    row.update({"measurement_count": len(got),
+                                "last_measured_at": max(r["measured_at"] for r in got).isoformat()})
+                else:
+                    status, level, est = "insufficient", None, False
+                row.update({"status": status, "level": level, "is_estimated": est})
+                round_scores(row)
+                rows.append(row)
     return rows
 
 
@@ -308,33 +386,40 @@ def print_rows(rows, places):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--date", help="YYYY-MM-DD. 그 날짜 하나만. 없으면 오늘 + 평일 · 주말 중 다른 쪽 가장 가까운 날")
+    ap.add_argument("--date", help="YYYY-MM-DD. hourly_forecast 를 이 날짜로. 기본은 오늘(한국 시각)")
     ap.add_argument("--sheet", help="DB 대신 읽을 측정 csv (analysis/측정결과.csv)")
     ap.add_argument("--dry-run", action="store_true", help="저장하지 않고 출력만")
     args = ap.parse_args()
 
     require_env()
     s = get_settings()
-    today = datetime.now(KST).date()
-    targets = [date.fromisoformat(args.date)] if args.date else [today, other_group_day(today)]
+    target = date.fromisoformat(args.date) if args.date else datetime.now(KST).date()
 
     places = sb_select("places", {"select": "id,name,congestion_area_cd", "order": "id"})
     hours_by_place = {(h["place_id"], h["weekday"]): h for h in sb_select("place_hours", {"select": "*"})}
     measurements = load_measurements_sheet(args.sheet) if args.sheet else load_measurements_db()
+    scored = score_all(measurements, s)
+    area_cds = sorted({p["congestion_area_cd"] for p in places})
 
-    earliest = min([m["measured_at"] for m in measurements] + [datetime.combine(min(targets), time(0), KST)])
-    congestion = load_congestion(sorted({p["congestion_area_cd"] for p in places}), earliest - timedelta(hours=1))
+    earliest = min([m["measured_at"] for m in measurements] + [datetime.combine(target, time(0), KST)])
+    congestion = load_congestion(area_cds, earliest - timedelta(hours=1))
 
-    for target in targets:
-        rows = build_rows(target, places, hours_by_place, measurements, congestion, s)
-        print(f"\n{target} ({'주말' if weekday_group(target) == 'weekend' else '평일'}) · 측정 {len(measurements)}건 · 칸 {len(rows)}개")
-        print_rows(rows, places)
+    rows = build_rows(target, places, hours_by_place, scored, congestion, s)
+    print(f"{target} ({'주말' if weekday_group(target) == 'weekend' else '평일'}) · 측정 {len(measurements)}건 · 칸 {len(rows)}개")
+    print_rows(rows, places)
 
-        if args.dry_run:
-            print("\n(저장하지 않음)")
-            continue
-        n = sb_upsert("hourly_forecast", rows, on_conflict="place_id,date,hour")
-        print(f"\nhourly_forecast 에 {n}줄 저장")
+    slot_rows = build_slot_rows(places, hours_by_place, scored, load_area_history(area_cds), s)
+    for group in GROUPS:
+        print(f"\n── slot_forecast · {'평일' if group == 'weekday' else '주말'} ──")
+        print_rows([r for r in slot_rows if r["day_group"] == group], places)
+
+    if args.dry_run:
+        print("\n(저장하지 않음)")
+        return
+    n = sb_upsert("hourly_forecast", rows, on_conflict="place_id,date,hour")
+    print(f"\nhourly_forecast 에 {n}줄 저장")
+    n = sb_upsert("slot_forecast", slot_rows, on_conflict="place_id,day_group,hour")
+    print(f"slot_forecast 에 {n}줄 저장")
 
 
 if __name__ == "__main__":

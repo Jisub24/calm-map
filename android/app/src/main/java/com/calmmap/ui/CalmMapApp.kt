@@ -50,7 +50,6 @@ import com.calmmap.ui.visit.OnSiteScreen
 import com.calmmap.ui.visit.PlannedVisitsScreen
 import com.calmmap.ui.visit.VisitCardScreen
 import com.calmmap.ui.visit.VisitTimeScreen
-import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import kotlinx.coroutines.CancellationException
@@ -99,15 +98,14 @@ fun CalmMapApp(
     // 다시 시도를 누를 때마다 늘려서 아래 읽기를 다시 돌린다
     var detailRetry by remember { mutableIntStateOf(0) }
     // 상세 화면에 들어올 때마다 새로 읽는다. 장소가 바뀔 때만 읽으면, 같은 장소를 다시 열었을 때 예전 값이 남는다.
-    // 지도에서 시간을 골랐으면 그 날 · 그 시각 기준으로 읽는다
+    // 지도에서 시간을 골랐으면 쌓인 평일/주말 기록의 그 시각 기준으로 읽는다
     LaunchedEffect(detailPlace?.id, screen == Screen.DETAIL, detailRetry) {
         if (screen != Screen.DETAIL) return@LaunchedEffect
         detail = null
         detailFailed = false
         val place = detailPlace ?: return@LaunchedEffect
-        val day = place.date ?: LocalDate.now(ZoneId.of("Asia/Seoul"))
         try {
-            detail = PlaceDetailRepository.load(place, place.slot?.hour ?: nowHour, day)
+            detail = PlaceDetailRepository.load(place, nowHour)
         } catch (e: CancellationException) {
             // 읽는 도중 상세를 떠난 것. 실패가 아니다
             throw e

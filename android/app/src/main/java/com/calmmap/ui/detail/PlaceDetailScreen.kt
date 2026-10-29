@@ -3,7 +3,6 @@ package com.calmmap.ui.detail
 import com.calmmap.ui.theme.LevelNoData
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -32,10 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -47,13 +42,14 @@ import com.calmmap.ui.component.BottomCta
 import com.calmmap.ui.component.CalmIcon
 import com.calmmap.ui.component.CalmIcons
 import com.calmmap.ui.component.CalmTabs
+import com.calmmap.ui.component.AreaCongestionSection
+import com.calmmap.ui.component.areaCongestionInfo
 import com.calmmap.ui.component.ChartLegend
 import com.calmmap.ui.component.FrequencyMeter
 import com.calmmap.ui.component.FullSegmented
 import com.calmmap.ui.component.HourlyBarChart
 import com.calmmap.ui.component.InfoButton
 import com.calmmap.ui.component.LevelBadge
-import com.calmmap.ui.component.LevelGlyph
 import com.calmmap.ui.component.PrimaryButton
 import com.calmmap.ui.component.ButtonSize
 import com.calmmap.ui.component.SecondaryButton
@@ -74,7 +70,6 @@ import com.calmmap.ui.theme.BrandPrimarySoft
 import com.calmmap.ui.theme.LevelCalm
 import com.calmmap.ui.theme.LevelHigh
 import com.calmmap.ui.theme.LevelMid
-import com.calmmap.ui.theme.LevelOutline
 import com.calmmap.ui.theme.Radius
 import com.calmmap.ui.theme.SensoryLevel
 import com.calmmap.ui.theme.StatusCaution
@@ -83,24 +78,6 @@ import com.calmmap.ui.theme.TextPrimary
 import com.calmmap.ui.theme.TextSecondary
 import com.calmmap.ui.theme.TextTertiary
 import com.calmmap.ui.theme.caption
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.offset
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.zIndex
-import com.calmmap.ui.component.calmShadow
-import com.calmmap.ui.theme.Shadows
-import com.calmmap.ui.theme.BorderStrong
-import kotlin.math.roundToInt
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.TextStyle
@@ -322,18 +299,17 @@ private fun RecommendationCard(recommendation: String, basis: String) {
 
 @Composable
 private fun HourlyCard(place: PlaceUi, nowHour: Int, selectedHour: Int?, onBarClick: (Int) -> Unit) {
+    val slot = place.slot
     val today = LocalDate.now(ZoneId.of("Asia/Seoul"))
-    // 지도에서 시간을 골랐으면 그 날 · 그 시각. 오늘이 아닌 날은 '오늘' 대신 요일로 부른다
-    val day = place.date ?: today
-    val week = day.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.KOREAN)
-    val dayType = if (day.dayOfWeek.value >= 6) "주말" else "평일"
-    val markHour = place.slot?.hour ?: nowHour
-    val markLabel = if (place.slot == null) "지금" else "선택"
+    val week = today.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.KOREAN)
+    // 지도에서 시간을 골랐으면 그 시각을 '선택' 으로 표시한다. 값이 특정 날짜가 아니라 쌓인 기록이라 날짜는 안 쓴다
+    val markHour = slot?.hour ?: nowHour
+    val markLabel = if (slot == null) "지금" else "선택"
     DetailCard {
-        if (day == today) {
-            CardTitle(title = "오늘 시간대별 감각부하", trailing = "$week · $dayType")
+        if (slot == null) {
+            CardTitle(title = "오늘 시간대별 감각부하", trailing = "$week · ${if (today.dayOfWeek.value >= 6) "주말" else "평일"}")
         } else {
-            CardTitle(title = "$week 시간대별 감각부하", trailing = "${day.monthValue}/${day.dayOfMonth} · $dayType")
+            CardTitle(title = "${slot.groupLabel} 시간대별 감각부하")
         }
         if (place.hours.isEmpty()) {
             Text(text = "아직 시간대 정보가 없어요", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
@@ -352,166 +328,8 @@ private fun HourlyCard(place: PlaceUi, nowHour: Int, selectedHour: Int?, onBarCl
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(BorderDefault))
-        CardTitle(title = "주변 지역 혼잡", info = "서울시가 추정한 혼잡도예요. 매장 안 혼잡도와 다를 수 있어요.")
-        // 줄이 있으면 실제 지역 혼잡, 없으면 예시 값.
-        // 다가오는 주말처럼 먼 날은 서울시 예측(12시간 앞까지)이 없어서 빈 그래프 대신 글로 알린다
-        if (place.areaCrowd.isNotEmpty() && place.areaCrowd.all { it == null }) {
-            Text(text = "주변 지역 혼잡 예측이 아직 없어요. 서울시 예측은 12시간 앞까지만 나와요", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
-        } else {
-            AreaCongestionChart(levels = place.areaCrowd.ifEmpty { sampleAreaCongestion }, nowHour = markHour)
-        }
-    }
-}
-
-// 8 ~ 22시 지역 혼잡 1 여유 · 2 보통 · 3 약간 붐빔 · 4 붐빔 (예시)
-private val sampleAreaCongestion: List<Int?> = listOf(1, 1, 1, 2, 2, 3, 3, 2, 2, 3, 4, 4, 3, 2, 1)
-private val congestionWords = listOf("여유", "보통", "약간 붐빔", "붐빔")
-
-/**
- * 주변 지역 혼잡 꺾은선 (8~22시). 최종안 09.
- *
- *   - 점과 점을 직선으로 잇고 아래를 연하게 채운다
- *   - 시간마다 흰 속 · 파란 테두리 점. 지금 시각만 속을 채우고 연한 후광을 두른다
- *   - 보이는 점(지금, 또는 누른 시각)에서 축까지 점선을 내리고 위에 흰 말풍선 "12시 보통"
- *   - 누르거나 끌면 가장 가까운 시각으로 말풍선이 옮겨 간다 (막대 그래프와 같은 방식)
- */
-@Composable
-private fun AreaCongestionChart(levels: List<Int?>, nowHour: Int) {
-    val startHour = 8
-    val nowIndex = (nowHour - startHour).coerceIn(0, levels.lastIndex)
-    // 누른 칸. 없으면 지금 칸에 말풍선을 둔다
-    var selected by remember { mutableStateOf<Int?>(null) }
-    val shown = selected ?: nowIndex
-
-    val chartHeight = 92.dp
-    val tipRoom = 36.dp     // 말풍선이 제목을 가리지 않게 위에 늘 비워 두는 자리
-    val padTop = 10.dp
-    val padBottom = 14.dp   // 가장 낮은 점(여유)과 바닥선 사이
-    val step = (chartHeight - padTop - padBottom) / 3
-    fun yOf(level: Int) = padTop + step * (4 - level)
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.fillMaxWidth().padding(top = tipRoom), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(chartHeight)
-                    .pointerInput(levels) {
-                        detectTapGestures { pos ->
-                            selected = (pos.x / (size.width / levels.size)).toInt().coerceIn(0, levels.lastIndex)
-                        }
-                    }
-                    .pointerInput(levels) {
-                        detectHorizontalDragGestures { change, _ ->
-                            change.consume()
-                            selected = (change.position.x / (size.width / levels.size)).toInt().coerceIn(0, levels.lastIndex)
-                        }
-                    },
-            ) {
-                val slot = size.width / levels.size
-                val baseY = size.height - 8.dp.toPx()
-                fun pt(i: Int) = Offset(slot * (i + 0.5f), yOf(levels[i] ?: 1).toPx())
-                // 값이 있는 시각만 점을 찍고, 값이 이어지는 구간만 선으로 잇는다 (서울시 예측은 12시간 앞까지)
-                val known = levels.indices.filter { levels[it] != null }
-                drawLine(BorderDefault, Offset(0f, baseY), Offset(size.width, baseY), 1.dp.toPx())
-                if (known.isNotEmpty()) {
-                    val line = Path(); val area = Path()
-                    var open = false
-                    for (i in levels.indices) {
-                        if (levels[i] == null) { open = false; continue }
-                        if (!open) { line.moveTo(pt(i).x, pt(i).y); area.moveTo(pt(i).x, baseY); area.lineTo(pt(i).x, pt(i).y); open = true }
-                        else { line.lineTo(pt(i).x, pt(i).y); area.lineTo(pt(i).x, pt(i).y) }
-                        if (i == levels.lastIndex || levels[i + 1] == null) { area.lineTo(pt(i).x, baseY); area.close() }
-                    }
-                    drawPath(area, Brush.verticalGradient(listOf(BrandPrimary.copy(alpha = 0.22f), BrandPrimary.copy(alpha = 0.03f))))
-                    drawPath(line, BrandPrimary, style = Stroke(1.8.dp.toPx(), cap = StrokeCap.Round))
-                }
-
-                // 보이는 점에서 바닥선까지 점선 (값이 있을 때만)
-                if (levels[shown] != null) drawLine(
-                    BrandPrimary, Offset(pt(shown).x, pt(shown).y), Offset(pt(shown).x, baseY),
-                    strokeWidth = 1.2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)),
-                )
-                known.forEach { i ->
-                    val p = pt(i)
-                    when {
-                        i == nowIndex -> {
-                            drawCircle(BrandPrimary.copy(alpha = 0.18f), 8.dp.toPx(), p)
-                            drawCircle(BrandPrimary, 3.5.dp.toPx(), p)
-                            drawCircle(BgSurface, 3.5.dp.toPx(), p, style = Stroke(1.5.dp.toPx()))
-                        }
-                        i == shown -> drawCircle(BrandPrimary, 3.5.dp.toPx(), p)
-                        else -> {
-                            drawCircle(BgSurface, 3.5.dp.toPx(), p)
-                            drawCircle(BrandPrimary, 3.5.dp.toPx(), p, style = Stroke(1.5.dp.toPx()))
-                        }
-                    }
-                }
-            }
-            Row(Modifier.fillMaxWidth()) {
-                levels.indices.forEach { i ->
-                    val h = startHour + i
-                    Text(
-                        text = if (h % 2 == 0) "$h" else "",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (i == nowIndex) FontWeight.Bold else FontWeight.Normal,
-                        color = if (i == nowIndex) BrandPrimary else TextTertiary,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-        }
-        if (levels[shown] != null) PointTip(
-            hour = startHour + shown,
-            word = congestionWords[((levels[shown] ?: 1) - 1).coerceIn(0, 3)],
-            index = shown,
-            slotCount = levels.size,
-            pointTop = tipRoom + yOf(levels[shown] ?: 1),
-            modifier = Modifier.zIndex(1f),
-        )
-    }
-}
-
-/** 꺾은선 점 위의 흰 말풍선 "12시 보통". 점 바로 위에 꼬리가 닿는다 */
-@Composable
-private fun PointTip(hour: Int, word: String, index: Int, slotCount: Int, pointTop: Dp, modifier: Modifier = Modifier) {
-    var tipSize by remember { mutableStateOf(IntSize.Zero) }
-    val density = LocalDensity.current
-    val arrow = 5.dp
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val totalPx = with(density) { maxWidth.toPx() }
-        val center = totalPx / slotCount * (index + 0.5f)
-        val x = (center - tipSize.width / 2f).coerceIn(0f, (totalPx - tipSize.width).coerceAtLeast(0f))
-        val y = with(density) { (pointTop - arrow - 10.dp).toPx() } - tipSize.height
-        Column(
-            modifier = Modifier
-                .offset { IntOffset(x.roundToInt(), y.roundToInt().coerceAtLeast(0)) }
-                .onSizeChanged { tipSize = it },
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = buildAnnotatedString {
-                    append("${hour}시 ")
-                    withStyle(SpanStyle(color = BrandPrimary, fontWeight = FontWeight.Bold)) { append(word) }
-                },
-                style = MaterialTheme.typography.caption,
-                color = TextSecondary,
-                modifier = Modifier
-                    .calmShadow(Shadows.tooltip, Radius.tooltip)
-                    .clip(Radius.tooltip)
-                    .background(BgSurface)
-                    .border(1.dp, BorderDefault, Radius.tooltip)
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
-            )
-            Canvas(Modifier.size(width = arrow * 2, height = arrow)) {
-                val tail = Path().apply {
-                    moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width / 2, size.height); close()
-                }
-                drawPath(tail, BgSurface)
-                drawPath(tail, BorderDefault, style = Stroke(1.dp.toPx()))
-            }
-        }
+        CardTitle(title = "주변 지역 혼잡", info = areaCongestionInfo(slot))
+        AreaCongestionSection(levels = place.areaCrowd, markHour = markHour, slot = slot, days = place.areaDays)
     }
 }
 

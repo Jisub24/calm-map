@@ -51,6 +51,10 @@ import com.calmmap.ui.theme.TextPrimary
 import com.calmmap.ui.theme.TextSecondary
 import com.calmmap.ui.theme.TextTertiary
 import com.calmmap.ui.theme.caption
+import com.calmmap.ui.component.AreaCongestionSection
+import com.calmmap.ui.component.areaCongestionInfo
+import java.time.LocalTime
+import java.time.ZoneId
 
 /** 서울시 지역 혼잡도 4단계 */
 private val congestionSteps = listOf("여유", "보통", "약간 붐빔", "붐빔")
@@ -116,7 +120,23 @@ fun NoDataScreen(
                 )
             }
 
-            // TODO: congestion · visits · measurement_requests 를 연결하면 DB 장소에도 보인다
+            // 점수는 없어도 주변 지역 혼잡은 서울시 자료라 보여줄 수 있다. 장소 상세와 같은 꺾은선.
+            // 지도에서 시간을 골랐으면 쌓인 기록, 아니면 오늘 값
+            if (info == null) {
+                val slot = place.slot
+                WhiteCard {
+                    Text(text = "주변 지역 혼잡", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+                    Text(text = areaCongestionInfo(slot), style = MaterialTheme.typography.caption, color = TextTertiary)
+                    AreaCongestionSection(
+                        levels = place.areaCrowd,
+                        markHour = slot?.hour ?: LocalTime.now(ZoneId.of("Asia/Seoul")).hour,
+                        slot = slot,
+                        days = place.areaDays,
+                    )
+                }
+            }
+
+            // TODO: visits · measurement_requests 를 연결하면 DB 장소에도 후기 · 요청 수가 보인다
             if (info != null) {
                 AreaCongestionCard(info)
 
