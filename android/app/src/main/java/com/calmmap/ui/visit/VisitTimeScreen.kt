@@ -182,9 +182,10 @@ fun VisitTimeScreen(
     }
 }
 
-/** "오늘 (화)" · "내일 (수)" · "토" · "일" */
+/** "오늘 (금)" · "내일 (토)" · "일" · "11/7 (토)" */
 private fun dayChipLabel(day: VisitDay): String =
-    if (day.label == "오늘" || day.label == "내일") {
+    // 요일이 아닌 이름(오늘 · 내일 · 날짜)에는 요일을 붙인다
+    if (day.label == "오늘" || day.label == "내일" || "/" in day.label) {
         "${day.label} (${day.date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.KOREAN)})"
     } else {
         day.label

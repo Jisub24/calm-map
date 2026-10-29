@@ -11,10 +11,14 @@ import java.util.Locale
 // '오늘' 은 서울 기준. 폰 시간대가 다르면(에뮬레이터는 UTC) 아침에 어제 날짜가 오늘로 잡힌다
 private val SEOUL: ZoneId = ZoneId.of("Asia/Seoul")
 
-/** 방문 시간 선택에서 고르는 날짜 칩 하나. "오늘" · "내일" · "토" · "일" */
+/** 방문 시간 선택에서 고르는 날짜 칩 하나. "오늘" · "내일" · "토" · "11/7" */
 data class VisitDay(val label: String, val date: LocalDate)
 
-/** 오늘 · 내일 · 다가오는 토 · 일. 토 · 일이 오늘이나 내일과 겹치면 그다음 주로 */
+/**
+ * 오늘 · 내일 · 내일 다음의 가장 가까운 토 · 일. 날짜순으로 둔다.
+ * 이름은 visitDayOf 와 같아서, 일주일 넘게 남은 날은 "11/7" 처럼 날짜로 나온다.
+ * 금요일이면 '내일(토)' 과 다음 주 토요일이 둘 다 "토" 로 보이던 것을 막는다
+ */
 fun upcomingVisitDays(today: LocalDate = LocalDate.now(SEOUL)): List<VisitDay> {
     val tomorrow = today.plusDays(1)
     fun nextAfterTomorrow(day: DayOfWeek): LocalDate {
@@ -22,12 +26,9 @@ fun upcomingVisitDays(today: LocalDate = LocalDate.now(SEOUL)): List<VisitDay> {
         while (date.dayOfWeek != day) date = date.plusDays(1)
         return date
     }
-    return listOf(
-        VisitDay("오늘", today),
-        VisitDay("내일", tomorrow),
-        VisitDay("토", nextAfterTomorrow(DayOfWeek.SATURDAY)),
-        VisitDay("일", nextAfterTomorrow(DayOfWeek.SUNDAY)),
-    )
+    return listOf(today, tomorrow, nextAfterTomorrow(DayOfWeek.SATURDAY), nextAfterTomorrow(DayOfWeek.SUNDAY))
+        .sorted()
+        .map { visitDayOf(it, today) }
 }
 
 /**
