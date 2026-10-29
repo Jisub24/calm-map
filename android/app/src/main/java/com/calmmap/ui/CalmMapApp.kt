@@ -19,6 +19,7 @@ import com.calmmap.data.MeasurementRepository
 import com.calmmap.data.PlaceDetailRepository
 import com.calmmap.data.PlaceRepository
 import com.calmmap.data.ProfileRepository
+import com.calmmap.data.brief
 import com.calmmap.ui.component.LoginRequiredSheet
 import com.calmmap.ui.component.MainTab
 import com.calmmap.ui.detail.NoDataScreen
@@ -93,16 +94,27 @@ fun CalmMapApp(
     var nowHour by remember { mutableIntStateOf(LocalTime.now(ZoneId.of("Asia/Seoul")).hour) }
     // 상세 탭(점수 · 소리 · 빛 · 사업장) 값. 장소를 고를 때마다 DB 에서 새로 읽는다
     var detail by remember { mutableStateOf<PlaceDetailUi?>(null) }
+    // 상세 탭을 못 읽었는지. 그러면 '불러오는 중' 대신 실패 안내와 다시 시도 버튼을 띄운다
+    var detailFailed by remember { mutableStateOf(false) }
+    // 다시 시도를 누를 때마다 늘려서 아래 읽기를 다시 돌린다
+    var detailRetry by remember { mutableIntStateOf(0) }
     // 상세 화면에 들어올 때마다 새로 읽는다. 장소가 바뀔 때만 읽으면, 같은 장소를 다시 열었을 때 예전 값이 남는다.
     // 지도에서 시간을 골랐으면 그 날 · 그 시각 기준으로 읽는다
-    LaunchedEffect(detailPlace?.id, screen == Screen.DETAIL) {
+    LaunchedEffect(detailPlace?.id, screen == Screen.DETAIL, detailRetry) {
         if (screen != Screen.DETAIL) return@LaunchedEffect
         detail = null
+        detailFailed = false
         val place = detailPlace ?: return@LaunchedEffect
         val day = place.date ?: LocalDate.now(ZoneId.of("Asia/Seoul"))
-        detail = runCatching { PlaceDetailRepository.load(place, place.slot?.hour ?: nowHour, day) }
-            .onFailure { Log.w("CalmMapApp", "장소 상세 불러오기 실패", it) }
-            .getOrNull()
+        try {
+            detail = PlaceDetailRepository.load(place, place.slot?.hour ?: nowHour, day)
+        } catch (e: CancellationException) {
+            // 읽는 도중 상세를 떠난 것. 실패가 아니다
+            throw e
+        } catch (e: Exception) {
+            Log.w("CalmMapApp", "장소 상세 불러오기 실패: ${e.brief()}")
+            detailFailed = true
+        }
     }
 
     // 방문 시간을 고를 장소
@@ -134,7 +146,7 @@ fun CalmMapApp(
     // 지도 시간 선택에서 고른 때. null 이면 지금. 상세에 다녀와도 그대로 둔다
     var mapSlot by remember { mutableStateOf<TimeSlot?>(null) }
     // 지도로 올 때마다 새로 읽는다. 앱을 켜 둔 채 시간이 지나거나 batch 가 점수를 새로 써도 옛 값이 남지 않게.
-    // 읽는 동안은 이전 목록을 그대로 보여주고, 실패하면 이전 목록을 둔다. 보여줄 것이 없을 때만 알린다
+    // 읽는 동안은 이전 목록을 그대로 보여주고, 실패하면 이전 목록을 둔 채 오래된 정보라고 알린다
     LaunchedEffect(screen == Screen.MAP) {
         if (screen != Screen.MAP) return@LaunchedEffect
         try {
@@ -144,8 +156,9 @@ fun CalmMapApp(
             // 읽는 도중 지도를 떠난 것. 실패가 아니다
             throw e
         } catch (e: Exception) {
-            Log.e("CalmMap", "장소 불러오기 실패", e)
-            if (mapPlaces == null) Toast.makeText(context, "장소를 불러오지 못했어요", Toast.LENGTH_SHORT).show()
+            Log.e("CalmMap", "장소 불러오기 실패: ${e.brief()}")
+            val message = if (mapPlaces == null) "장소를 불러오지 못했어요" else "최신 정보를 불러오지 못했어요"
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
     }
     // 설정을 읽다가 실패했는지. '불러오는 중' 대신 실패 안내를 띄운다
@@ -158,7 +171,7 @@ fun CalmMapApp(
             // 줄이 없으면 아무것도 고르지 않은 것과 같다
             ProfileRepository.load() ?: emptyMap()
         } catch (e: Exception) {
-            Log.e("CalmMap", "우리 아이 설정 불러오기 실패", e)
+            Log.e("CalmMap", "우리 아이 설정 불러오기 실패: ${e.brief()}")
             childLoadFailed = true
             null
         }
@@ -310,7 +323,7 @@ fun CalmMapApp(
                             sensitivities = values
                             screen = Screen.ME
                         } catch (e: Exception) {
-                            Log.e("CalmMap", "우리 아이 설정 저장 실패", e)
+                            Log.e("CalmMap", "우리 아이 설정 저장 실패: ${e.brief()}")
                             Toast.makeText(context, "저장하지 못했어요. 다시 시도해 주세요", Toast.LENGTH_SHORT).show()
                         }
                         savingChild = false
@@ -469,6 +482,8 @@ fun CalmMapApp(
                     else -> PlaceDetailScreen(
                         place = place,
                         detail = detail,
+                        detailFailed = detailFailed,
+                        onRetry = { detailRetry++ },
                         nowHour = nowHour,
                         onBack = { screen = Screen.MAP },
                         onMeasureClick = { startMeasure(place) },

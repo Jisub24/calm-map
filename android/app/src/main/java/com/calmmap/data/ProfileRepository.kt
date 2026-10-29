@@ -22,10 +22,11 @@ object ProfileRepository {
     /** 저장된 설정을 읽는다. 아직 설정하지 않은 계정이면 null */
     suspend fun load(): Map<SensoryFactor, Sensitivity>? {
         // RLS 가 자기 줄만 돌려주므로 조건 없이 읽어도 0줄 또는 1줄이다
-        val row = supabase.from("user_profiles")
-            .select(Columns.list("user_id", "sensitivities"))
-            .decodeSingleOrNull<ProfileRow>()
-            ?: return null
+        val row = withFreshSession {
+            supabase.from("user_profiles")
+                .select(Columns.list("user_id", "sensitivities"))
+                .decodeSingleOrNull<ProfileRow>()
+        } ?: return null
         return SensoryFactor.entries.associateWith { factor ->
             // 키가 없거나 모르는 값이면 보통 (020 규칙)
             row.sensitivities[factor.dbKey()]?.let(::sensitivityOf) ?: Sensitivity.Normal
@@ -43,7 +44,7 @@ object ProfileRepository {
             },
             updated_at = Instant.now().toString(),
         )
-        supabase.from("user_profiles").upsert(row)
+        withFreshSession { supabase.from("user_profiles").upsert(row) }
     }
 
     // 앱 요인 ↔ DB 키 (020_user_profiles_levels.sql)
