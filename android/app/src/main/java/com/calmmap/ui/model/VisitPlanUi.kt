@@ -31,6 +31,8 @@ data class VisitPlan(
     val place: PlaceUi,
     val day: VisitDay,
     val hour: Int,
+    /** visits 줄 번호. 취소 · 기록할 때 이것으로 찾는다. 미리보기용은 null */
+    val id: Long? = null,
 ) {
     /** "오늘 15:00" */
     val whenLabel: String get() = "${day.label} ${"%02d".format(hour)}:00"

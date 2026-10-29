@@ -1,5 +1,6 @@
 package com.calmmap.ui.visit
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,12 +20,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.calmmap.data.brief
 import com.calmmap.ui.component.ActionChip
 import com.calmmap.ui.component.BottomCta
 import com.calmmap.ui.component.CalmIcon
@@ -45,20 +49,23 @@ import com.calmmap.ui.theme.BrandPrimary
 import com.calmmap.ui.theme.CalmMapTheme
 import com.calmmap.ui.theme.Radius
 import com.calmmap.ui.theme.SensoryLevel
+import com.calmmap.ui.theme.StatusCaution
 import com.calmmap.ui.theme.TextPrimary
 import com.calmmap.ui.theme.TextSecondary
 import com.calmmap.ui.theme.TextTertiary
 import com.calmmap.ui.theme.caption
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 // 최종안 11 방문 시간 선택: 날짜와 시간을 고르고 "오늘 15:00로 정하기"
+// onConfirm 은 DB 에 쓰는 동안 기다린다. 실패하면 이 화면에 남아서 다시 누를 수 있다
 @Composable
 fun VisitTimeScreen(
     place: PlaceUi,
     nowHour: Int,
     onBack: () -> Unit,
-    onConfirm: (day: VisitDay, hour: Int) -> Unit,
+    onConfirm: suspend (day: VisitDay, hour: Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val days = remember { upcomingVisitDays() }
@@ -70,6 +77,9 @@ fun VisitTimeScreen(
         mutableIntStateOf(first?.hour ?: nowHour)
     }
     var reminderOn by remember { mutableStateOf(true) }
+    var saving by remember { mutableStateOf(false) }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     val whenText = "${day.label} ${"%02d".format(hour)}:00"
 
     Column(modifier = modifier.fillMaxSize().background(BgCanvas)) {
@@ -138,7 +148,36 @@ fun VisitTimeScreen(
         }
 
         BottomCta {
-            PrimaryButton(text = "${whenText}로 정하기", onClick = { onConfirm(day, hour) })
+            // 버튼 줄은 가로라서 안내 문구를 버튼 위에 두려고 세로로 한 번 감싼다
+            Column(Modifier.weight(1f)) {
+                saveError?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.caption,
+                        color = StatusCaution,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    )
+                }
+                PrimaryButton(
+                    text = if (saving) "저장하는 중…" else "${whenText}로 정하기",
+                    enabled = !saving,
+                    onClick = {
+                        scope.launch {
+                            saving = true
+                            saveError = null
+                            try {
+                                onConfirm(day, hour)
+                            } catch (e: Exception) {
+                                Log.w("VisitTime", "방문 저장 실패: ${e.brief()}")
+                                saveError = "저장하지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요"
+                            } finally {
+                                saving = false
+                            }
+                        }
+                    },
+                )
+            }
         }
     }
 }

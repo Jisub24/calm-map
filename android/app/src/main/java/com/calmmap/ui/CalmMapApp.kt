@@ -19,6 +19,7 @@ import com.calmmap.data.MeasurementRepository
 import com.calmmap.data.PlaceDetailRepository
 import com.calmmap.data.PlaceRepository
 import com.calmmap.data.ProfileRepository
+import com.calmmap.data.VisitRepository
 import com.calmmap.data.brief
 import com.calmmap.ui.component.LoginRequiredSheet
 import com.calmmap.ui.component.MainTab
@@ -118,7 +119,7 @@ fun CalmMapApp(
     // 방문 시간을 고를 장소
     var visitPlace by remember { mutableStateOf<PlaceUi?>(null) }
     // 정해 둔 방문들. 가까운 시간이 앞에 오게 정렬해 둔다
-    // TODO: 저장하지 않아서 앱을 끄면 사라진다
+    // TODO: 정할 때 visits 에 저장한다. 앱을 다시 켰을 때 읽어오는 것은 다음 작업
     val visitPlans = remember { mutableStateListOf<VisitPlan>() }
     // 지금 카드 · 현장 모드 · 기록에서 다루는 방문
     var activePlan by remember { mutableStateOf<VisitPlan?>(null) }
@@ -356,8 +357,16 @@ fun CalmMapApp(
                         place = place,
                         nowHour = nowHour,
                         onBack = { screen = visitFrom },
+                        // DB 에 들어간 뒤에야 지도로. 같은 장소의 예정이 있으면 새 줄 대신 시각만 바꾼다
                         onConfirm = { day, hour ->
-                            addPlan(VisitPlan(place, day, hour))
+                            val before = visitPlans.find { it.place.id == place.id }?.id
+                            val id = if (before != null) {
+                                VisitRepository.reschedule(before, day.date, hour)
+                                before
+                            } else {
+                                VisitRepository.add(place.id, day.date, hour)
+                            }
+                            addPlan(VisitPlan(place, day, hour, id))
                             // 계획만 잡고 지도로. 갈 때 '방문 예정' 띠를 눌러 카드를 연다
                             screen = Screen.MAP
                         },
