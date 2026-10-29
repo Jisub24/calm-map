@@ -28,17 +28,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.calmmap.ui.component.ButtonSize
+import com.calmmap.ui.component.CalmTabs
 import com.calmmap.ui.component.CalmIcon
 import com.calmmap.ui.component.CalmIcons
 import com.calmmap.ui.component.InfoButton
+import com.calmmap.ui.component.InfoNote
 import com.calmmap.ui.component.LevelBadge
 import com.calmmap.ui.component.PrimaryButton
 import com.calmmap.ui.component.SecondaryButton
-import com.calmmap.ui.component.TooltipBubble
 import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.component.outlineBorder
+import com.calmmap.ui.model.MEASURE_NOW_ONLY
+import com.calmmap.ui.model.PlaceDetailUi
 import com.calmmap.ui.model.NoDataUi
 import com.calmmap.ui.model.PlaceUi
+import com.calmmap.ui.model.TimeSlot
 import com.calmmap.ui.theme.BgCanvas
 import com.calmmap.ui.theme.BgSubtle
 import com.calmmap.ui.theme.BgSunken
@@ -59,12 +63,20 @@ import java.time.ZoneId
 /** 서울시 지역 혼잡도 4단계 */
 private val congestionSteps = listOf("여유", "보통", "약간 붐빔", "붐빔")
 
+/** 정보 부족 화면 탭. 시간마다 달라지는 점수 칸이 없어서 장소 상세보다 적다 */
+private enum class NoDataTab(val label: String) {
+    AREA("주변 혼잡"),
+    SOUND("소리"),
+    LIGHT("빛"),
+}
+
 /**
  * 최종안 10 정보 부족 장소 · ⓘ 눌렀을 때.
  *
  * 종합 점수를 내지 않는다. 소리 · 빛이 비면 실제 최댓값을 알 수 없어서,
  * 혼잡만으로 점수를 내면 부담을 낮게 잘못 안내하게 된다.
- * 대신 ① 주변 지역 혼잡 ② 보호자 후기 ③ 측정 요청 · 직접 측정 을 보여준다.
+ * 대신 탭으로 ① 주변 지역 혼잡 ② 소리 ③ 빛 을 보여준다. 소리 · 빛은 평일 · 주말 상관없는 장소 고유값만
+ * (답변서2 질의1). 측정 요청 · 직접 측정 카드는 어느 탭이든 아래에 둔다.
  */
 @Composable
 fun NoDataScreen(
@@ -74,8 +86,16 @@ fun NoDataScreen(
     onBack: () -> Unit,
     onMeasureClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** "주말 기록 보기". 그 묶음 · 시각으로 장소 상세를 연다 */
+    onOtherRecordClick: (TimeSlot) -> Unit = {},
+    /** 소리 · 빛 탭 값. 장소 상세와 같이 읽는다. 읽는 중이면 null */
+    detail: PlaceDetailUi? = null,
+    detailFailed: Boolean = false,
+    onRetry: () -> Unit = {},
 ) {
     var requested by remember { mutableStateOf(false) }
+    val other = place.otherRecord
+    var tab by remember(place.id, place.slot) { mutableStateOf(NoDataTab.AREA) }
 
     Column(
         modifier = modifier
@@ -112,45 +132,49 @@ fun NoDataScreen(
                     .padding(horizontal = 19.dp, vertical = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(text = "이 장소의 소리·빛 정보가 아직 없어요", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
-                Text(
-                    text = "모르는 것을 '무던함'으로 추측하지 않아요. 종합 점수는 측정이 쌓이면 보여드려요.",
-                    style = MaterialTheme.typography.caption,
-                    color = TextSecondary,
-                )
-            }
-
-            // 점수는 없어도 주변 지역 혼잡은 서울시 자료라 보여줄 수 있다. 장소 상세와 같은 꺾은선.
-            // 지도에서 시간을 골랐으면 쌓인 기록, 아니면 오늘 값
-            if (info == null) {
-                val slot = place.slot
-                WhiteCard {
-                    Text(text = "주변 지역 혼잡", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
-                    Text(text = areaCongestionInfo(slot), style = MaterialTheme.typography.caption, color = TextTertiary)
-                    AreaCongestionSection(
-                        levels = place.areaCrowd,
-                        markHour = slot?.hour ?: LocalTime.now(ZoneId.of("Asia/Seoul")).hour,
-                        slot = slot,
-                        days = place.areaDays,
+                if (other == null) {
+                    Text(text = "이 장소의 소리·빛 정보가 아직 없어요", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
+                    Text(
+                        text = "모르는 것을 '무던함'으로 추측하지 않아요. 종합 점수는 측정이 쌓이면 보여드려요.",
+                        style = MaterialTheme.typography.caption,
+                        color = TextSecondary,
+                    )
+                } else {
+                    // 다른 묶음에는 잰 기록이 있다. 붐비는 정도가 달라 이쪽 점수로 쓰지 않고 그 기록으로 보내 준다
+                    Text(text = "${other.emptyGroupLabel}에 잰 기록은 아직 없어요", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
+                    Text(text = "${other.slot.groupLabel}에는 ${other.count}번 쟀어요", style = MaterialTheme.typography.caption, color = TextSecondary)
+                    other.summary?.let { Text(text = it, style = MaterialTheme.typography.caption, color = TextSecondary) }
+                    SecondaryButton(
+                        text = "${other.slot.groupLabel} 기록 보기",
+                        onClick = { onOtherRecordClick(other.slot) },
+                        size = ButtonSize.M,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp),
                     )
                 }
             }
 
-            // TODO: visits · measurement_requests 를 연결하면 DB 장소에도 후기 · 요청 수가 보인다
-            if (info != null) {
-                AreaCongestionCard(info)
+            CalmTabs(
+                tabs = NoDataTab.entries.map { it.label },
+                selectedIndex = tab.ordinal,
+                onSelect = { tab = NoDataTab.entries[it] },
+            )
 
-                WhiteCard {
-                    Text(text = "보호자 후기 ${info.reviewTotal}건", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
-                    Text(text = "점수에는 넣지 않아요", style = MaterialTheme.typography.caption, color = TextTertiary)
-                    Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ReviewPill("괜찮았어요", info.reviewGood, Modifier.weight(1f))
-                        ReviewPill("힘들었어요", info.reviewHard, Modifier.weight(1f))
-                    }
-                }
+            when {
+                tab == NoDataTab.AREA -> AreaTab(place, info)
+                detail == null && detailFailed -> FailedCard(onRetry = onRetry)
+                detail == null -> LoadingCard()
+                tab == NoDataTab.SOUND -> SoundCard(
+                    sounds = detail.fixedSounds,
+                    measureCount = detail.measureCount,
+                    info = "안내방송 · 배경 음악은 평일 · 주말 상관없이 이 장소에서 잰 모든 측정으로 보여드려요. " +
+                        "말소리 · 돌발 소리는 시간마다 달라서 그 시간대 기록에서 보여드려요.",
+                )
+                else -> LightCard(detail.light)
             }
 
-            // 측정 요청 카드 (연한 파랑)
+            // 측정 요청 카드 (연한 파랑). 어느 탭이든 보이게 탭 내용 아래에 둔다
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -169,12 +193,18 @@ fun NoDataScreen(
                     )
                 }
                 Text(
-                    text = "요청이 많은 곳부터 측정해요. 원음은 저장하지도 보내지도 않아요.",
+                    text = if (other != null && place.slot == null) {
+                        "${other.emptyGroupLabel}에 직접 재면 ${other.emptyGroupLabel} 점수가 생겨요. 원음은 저장하지도 보내지도 않아요."
+                    } else {
+                        "요청이 많은 곳부터 측정해요. 원음은 저장하지도 보내지도 않아요."
+                    },
                     style = MaterialTheme.typography.caption,
                     color = TextSecondary,
                 )
+                // 시간 선택 중에는 측정을 막는다
+                val measureLocked = place.slot != null
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SecondaryButton(text = "직접 측정하기", onClick = onMeasureClick, size = ButtonSize.M, modifier = Modifier.weight(1f))
+                    SecondaryButton(text = "직접 측정하기", onClick = onMeasureClick, enabled = !measureLocked, size = ButtonSize.M, modifier = Modifier.weight(1f))
                     // TODO: measurement_requests 에 저장
                     PrimaryButton(
                         text = if (requested) "요청했어요" else "측정 요청하기",
@@ -184,7 +214,45 @@ fun NoDataScreen(
                         modifier = Modifier.weight(1f),
                     )
                 }
+                if (measureLocked) Text(text = MEASURE_NOW_ONLY, style = MaterialTheme.typography.caption, color = TextTertiary)
             }
+        }
+    }
+}
+
+/**
+ * 주변 혼잡 탭. 점수는 없어도 주변 지역 혼잡은 서울시 자료라 보여줄 수 있다. 장소 상세와 같은 꺾은선.
+ * 지도에서 시간을 골랐으면 쌓인 기록, 아니면 오늘 값
+ */
+@Composable
+private fun AreaTab(place: PlaceUi, info: NoDataUi?) {
+    if (info == null) {
+        val slot = place.slot
+        var showInfo by remember { mutableStateOf(false) }
+        WhiteCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = "주변 지역 혼잡", style = MaterialTheme.typography.titleMedium, color = TextPrimary, modifier = Modifier.weight(1f))
+                InfoButton(open = showInfo, onClick = { showInfo = !showInfo })
+            }
+            if (showInfo) InfoNote(areaCongestionInfo(slot), modifier = Modifier.padding(bottom = 8.dp))
+            AreaCongestionSection(
+                levels = place.areaCrowd,
+                markHour = slot?.hour ?: LocalTime.now(ZoneId.of("Asia/Seoul")).hour,
+                slot = slot,
+                days = place.areaDays,
+            )
+        }
+        return
+    }
+
+    // TODO: visits · measurement_requests 를 연결하면 DB 장소에도 후기 · 요청 수가 보인다
+    AreaCongestionCard(info)
+    WhiteCard {
+        Text(text = "보호자 후기 ${info.reviewTotal}건", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+        Text(text = "점수에는 넣지 않아요", style = MaterialTheme.typography.caption, color = TextTertiary)
+        Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ReviewPill("괜찮았어요", info.reviewGood, Modifier.weight(1f))
+            ReviewPill("힘들었어요", info.reviewHard, Modifier.weight(1f))
         }
     }
 }
@@ -201,7 +269,7 @@ private fun WhiteCard(content: @Composable ColumnScope.() -> Unit) {
     )
 }
 
-/** 주변 지역 혼잡: 4칸 막대 + 지금 · 다음 변화. ⓘ 를 누르면 말풍선으로 출처를 알린다 */
+/** 주변 지역 혼잡: 4칸 막대 + 지금 · 다음 변화. ⓘ 를 누르면 출처를 알린다 */
 @Composable
 private fun AreaCongestionCard(info: NoDataUi) {
     var showInfo by remember { mutableStateOf(false) }
@@ -215,15 +283,9 @@ private fun AreaCongestionCard(info: NoDataUi) {
                 Text(text = "주변 지역 혼잡", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
                 Text(text = "${info.areaName} · 서울시 예측", style = MaterialTheme.typography.caption, color = TextTertiary)
             }
-            InfoButton(onClick = { showInfo = !showInfo })
+            InfoButton(open = showInfo, onClick = { showInfo = !showInfo })
         }
-        if (showInfo) {
-            TooltipBubble(
-                title = "서울시가 측정한 지역 혼잡도 예측이에요.",
-                body = "매장 안 혼잡도와 다를 수 있어요.",
-                modifier = Modifier.align(Alignment.End),
-            )
-        }
+        if (showInfo) InfoNote("서울시가 측정한 지역 혼잡도 예측이에요. 매장 안 혼잡도와 다를 수 있어요.", modifier = Modifier.padding(top = 8.dp))
         Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             congestionSteps.forEachIndexed { i, step ->
                 Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {

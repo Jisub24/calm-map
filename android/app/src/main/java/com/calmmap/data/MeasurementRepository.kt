@@ -56,8 +56,10 @@ object MeasurementRepository {
         val userId = AuthRepository.userId() ?: error("로그인하지 않은 상태에서 저장하려고 했어요")
         require(result.canSave) { "1분이 안 되는 측정은 저장할 수 없어요" }
 
+        // 카카오 검색에서 고른 가게는 아직 DB 에 없다. 측정을 남길 때 장소를 먼저 넣는다
+        val placeId = result.place.kakao?.let { KakaoPlaceRepository.register(it) } ?: result.place.id
         val row = MeasurementRow(
-            place_id = result.place.id,
+            place_id = placeId,
             user_id = userId,
             device_model = Build.MODEL,
             measured_at = result.startedAt.atZone(ZoneId.of("Asia/Seoul")).toOffsetDateTime().toString(),

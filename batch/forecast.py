@@ -57,6 +57,8 @@ GROUPS = ("weekday", "weekend")
 GROUP_WEEKDAYS = {"weekday": (1, 2, 3, 4, 5), "weekend": (6, 7)}
 # 장소 고유값 (답변서2 질의1). 보간 칸에서도 시각마다 바꾸지 않는다
 PLACE_FIXED = ("light", "sound")
+# 영업시간을 모르는 장소(앱 검색으로 넣은 곳)에 쓰는 하루. 앱 그래프 범위 8~22시와 같다
+DEFAULT_HOURS = {"is_closed": False, "open_time": "08:00:00", "close_time": "23:00:00", "closes_next_day": False}
 
 
 # -----------------------------------------------------
@@ -201,6 +203,17 @@ def place_fixed(scored_place):
     return out
 
 
+def with_place_light(agg, fixed):
+    """칸 측정 대신 장소 전체(평일 · 주말 모두)의 밝기로 바꾸고 종합을 다시 낸다.
+
+    밝기는 장소 고유값이라 평일 · 주말 · 시각으로 나누지 않는다 (답변서2 질의1).
+    batch 가 돌 때마다 다시 내므로 측정이 쌓이면 가운데 값도 따라 바뀐다.
+    """
+    if fixed["score_light"] is None:
+        return agg
+    return with_total({**agg, "score_light": fixed["score_light"]})
+
+
 def judge(n, total_sec, total, s):
     """실측이 있는 칸의 상태 · 단계 · 점선 여부.
 
@@ -306,7 +319,7 @@ def build_rows(target_date, places, hours_by_place, scored, congestion, s):
 
             got = by_hour.get(h)
             if got:
-                agg = median_scores(got)
+                agg = with_place_light(median_scores(got), fixed)
                 status, level, est = judge(len(got), sum(r["duration_sec"] for r in got), agg["total_score"], s)
                 row.update(agg)
                 row.update({"measurement_count": len(got),
@@ -317,6 +330,8 @@ def build_rows(target_date, places, hours_by_place, scored, congestion, s):
                     agg = with_total({**agg, **fixed})   # 밝기 · 소리 종류는 장소 고유값
                     row.update(agg); status, level, est = estimated(level_of(agg["total_score"], s))
                 else:
+                    # 종합은 내지 않고 밝기만 둔다. 빛 탭이 평일에도 밝기 단계를 보여줄 수 있게
+                    row["score_light"] = fixed["score_light"]
                     status, level, est = "insufficient", None, False
             row.update({"status": status, "level": level, "is_estimated": est})
             round_scores(row)
@@ -330,11 +345,13 @@ def group_hours(hours_by_place, pid, group):
 
 
 def build_slot_rows(places, hours_by_place, scored, area_history, s):
-    """slot_forecast 줄. 날짜 없이 장소 × 평일/주말 × 시각. 측정한 칸만 점수, 빈 칸은 정보 부족."""
+    """slot_forecast 줄. 날짜 없이 장소 × 평일/주말 × 시각. 측정한 칸만 점수, 빈 칸은 정보 부족.
+    밝기는 어느 칸이든 장소 전체 가운데 값 (with_place_light)."""
     rows = []
     computed_at = datetime.now(KST).isoformat()
     for p in places:
         pid, area = p["id"], p["congestion_area_cd"]
+        fixed = place_fixed([r for r in scored if r["place_id"] == pid])
         for group in GROUPS:
             by_hour = defaultdict(list)
             for r in scored:
@@ -350,12 +367,13 @@ def build_slot_rows(places, hours_by_place, scored, area_history, s):
                     row[f"score_{f}"] = None
                 got = by_hour.get(h)
                 if got:
-                    agg = median_scores(got)
+                    agg = with_place_light(median_scores(got), fixed)
                     status, level, est = judge(len(got), sum(r["duration_sec"] for r in got), agg["total_score"], s)
                     row.update(agg)
                     row.update({"measurement_count": len(got),
                                 "last_measured_at": max(r["measured_at"] for r in got).isoformat()})
                 else:
+                    row["score_light"] = fixed["score_light"]
                     status, level, est = "insufficient", None, False
                 row.update({"status": status, "level": level, "is_estimated": est})
                 round_scores(row)
@@ -397,9 +415,15 @@ def main():
 
     places = sb_select("places", {"select": "id,name,congestion_area_cd", "order": "id"})
     hours_by_place = {(h["place_id"], h["weekday"]): h for h in sb_select("place_hours", {"select": "*"})}
+    # 영업시간 칸이 없으면 측정해도 점수 칸이 안 생겨서 8~22시를 연 것으로 본다
+    has_hours = {pid for pid, _ in hours_by_place}
+    for p in places:
+        if p["id"] not in has_hours:
+            hours_by_place.update({(p["id"], d): DEFAULT_HOURS for d in range(1, 8)})
     measurements = load_measurements_sheet(args.sheet) if args.sheet else load_measurements_db()
     scored = score_all(measurements, s)
-    area_cds = sorted({p["congestion_area_cd"] for p in places})
+    # 1km 안에 혼잡 지역이 없는 장소는 지역이 비어 있다
+    area_cds = sorted({p["congestion_area_cd"] for p in places if p["congestion_area_cd"]})
 
     earliest = min([m["measured_at"] for m in measurements] + [datetime.combine(target, time(0), KST)])
     congestion = load_congestion(area_cds, earliest - timedelta(hours=1))

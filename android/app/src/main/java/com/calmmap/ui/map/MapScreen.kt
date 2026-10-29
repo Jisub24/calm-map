@@ -85,6 +85,7 @@ import com.calmmap.ui.model.VisitPlan
 import com.calmmap.ui.model.samplePlaces
 import com.calmmap.ui.theme.TextPrimary
 import com.calmmap.ui.theme.TextTertiary
+import com.calmmap.ui.theme.TextDisabled
 import com.calmmap.ui.theme.BorderStrong
 import com.calmmap.ui.theme.BgSurface
 import com.calmmap.ui.theme.SensoryLevel
@@ -146,13 +147,11 @@ fun MapScreen(
     var timeOpen by remember { mutableStateOf(false) }
     BackHandler(enabled = timeOpen) { timeOpen = false }
 
-    // 그 날 점수가 한 칸도 없는 장소는 카드를 거치지 않고 바로 상세로 보낸다.
-    // 카드의 알맹이가 권고 시간대와 그래프인데 둘 다 없어서 빈 카드가 올라온다.
-    // 고른 시각만 비어 있는 장소는 카드를 연다. 그 날 다른 시각을 그래프로 볼 수 있다
+    // 어느 장소든 카드를 먼저 연다. 점수가 한 칸도 없어도 "평일에 잰 기록은 아직 없어요 · 주말에는 3번 쟀어요"
+    // 처럼 알릴 말이 있고, 장소마다 누를 때 다른 화면이 뜨면 헷갈린다. 상세 보기에서 정보 부족 화면으로 간다
     fun pick(place: PlaceUi) {
         timeOpen = false
-        if (!place.hasForecast) onPlaceClick(place)
-        else selectedPlace = place
+        selectedPlace = place
     }
 
     // '지금 무던한 곳' 은 무던함만 센다. 보통 · 후보는 '그 밖의 장소'.
@@ -245,7 +244,8 @@ fun MapScreen(
                             .padding(end = 16.dp, bottom = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        MeasureButton(onClick = onMeasureClick)
+                        // 시간 선택 중에는 흐리게. 누르면 '지금' 으로 바꾸라고 알린다
+                        MeasureButton(enabled = slot == null, onClick = onMeasureClick)
                         // TODO: 실제 내 위치를 붙이면 그 자리로 옮긴다. 지금은 처음 위치(홍대)로 돌아간다
                         LocateButton(onClick = { recenterKey++ })
                     }
@@ -350,7 +350,7 @@ private fun VisitBanner(
 
 /** 지도 오른쪽 아래 측정 버튼. 내 위치 버튼과 같은 흰 바탕 · 높이 44 · Float 그림자 */
 @Composable
-private fun MeasureButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun MeasureButton(enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .height(44.dp)
@@ -362,8 +362,8 @@ private fun MeasureButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CalmIcon(CalmIcons.Mic, size = 18.dp, tint = BrandPrimary)
-        Text(text = "측정", style = MaterialTheme.typography.labelLarge, color = TextPrimary)
+        CalmIcon(CalmIcons.Mic, size = 18.dp, tint = if (enabled) BrandPrimary else TextDisabled)
+        Text(text = "측정", style = MaterialTheme.typography.labelLarge, color = if (enabled) TextPrimary else TextDisabled)
     }
 }
 
@@ -618,7 +618,7 @@ private fun NaverMapHost(
  * 화면을 벗어나도 메모리를 붙잡고 있는다.
  */
 @Composable
-private fun NaverMapView(
+internal fun NaverMapView(
     modifier: Modifier = Modifier,
     onMapReady: (NaverMap) -> Unit = {},
 ) {

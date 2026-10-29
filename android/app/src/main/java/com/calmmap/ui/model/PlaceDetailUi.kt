@@ -14,6 +14,8 @@ data class PlaceDetailUi(
     /** 지금 시각의 점수 내역. 오늘 점수가 한 칸도 없으면 null */
     val score: ScoreBreakdown?,
     val sounds: List<SoundRow> = emptyList(),
+    /** 평일 · 주말 상관없는 장소 고유 소리 — 안내방송 빈도 · 배경 음악 (답변서2 질의1). 정보 부족 화면 소리 탭 */
+    val fixedSounds: List<SoundRow> = emptyList(),
     /** 소리 탭 제목 옆 "최근 측정 N회". 모르면 null */
     val measureCount: Int? = null,
     val light: LightInfo? = null,

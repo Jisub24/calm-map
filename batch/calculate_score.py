@@ -30,6 +30,9 @@ from common import get_settings, require_env, sb_select
 # 단계 이름. hourly_forecast.level 과 같은 글자를 쓴다
 CALM, NORMAL, HIGH = "calm", "normal", "high"
 
+# 이보다 어두우면 센서가 가려졌거나(주머니) 센서가 없는 기기로 보고 밝기 점수를 내지 않는다. 앱 MIN_VALID_LUX 와 같은 값
+LUX_MIN = 5
+
 
 
 # -----------------------------------------------------
@@ -132,9 +135,9 @@ def score_light(lux_median, lux_status, s):
 
     로그로 하는 이유: 눈은 밝기를 배수로 느낀다 (300→600 과 1000→2000 이 비슷하게
     "두 배"). 직선으로 하면 카페(300~500)가 전부 0점 근처에 몰린다.
-    미측정 · 측정실패면 점수를 내지 않는다. 0점이 아니라 "모름"이다.
+    미측정 · 측정실패 · LUX_MIN 미만이면 점수를 내지 않는다. 0점이 아니라 "모름"이다.
     """
-    if lux_status != "측정유효" or lux_median is None or lux_median <= 0:
+    if lux_status != "측정유효" or lux_median is None or lux_median < LUX_MIN:
         return None
     zero, full = s["score_light"]["lux_zero"], s["score_light"]["lux_full"]
     return clamp(math.log(lux_median / zero) / math.log(full / zero) * 100)

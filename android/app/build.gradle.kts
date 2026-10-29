@@ -39,6 +39,8 @@ android {
         // anon key 만 넣는다. service key 는 앱에 절대 넣지 않는다
         buildConfigField("String", "SUPABASE_URL", "\"${localProps.getProperty("SUPABASE_URL") ?: ""}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProps.getProperty("SUPABASE_ANON_KEY") ?: ""}\"")
+        // 카카오 장소 검색(REST). 비어 있으면 검색에 카카오 결과가 안 나오고 DB 장소만 나온다
+        buildConfigField("String", "KAKAO_REST_KEY", "\"${localProps.getProperty("KAKAO_REST_KEY") ?: ""}\"")
     }
 
     buildTypes {
