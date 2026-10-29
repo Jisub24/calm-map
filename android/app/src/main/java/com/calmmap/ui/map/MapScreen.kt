@@ -302,17 +302,27 @@ private fun VisitBanner(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = "$placeName · $whenText 방문 예정 ›",
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Medium,
-                color = BgSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                // 둘째 줄은 글자가 작아 누르는 영역이 위로 넓어진다(최소 48dp).
-                // 첫 줄도 따로 누를 수 있게 해야 첫 줄을 눌렀을 때 둘째 줄로 가지 않는다
+            // 장소 이름이 길어 한 줄에 시각까지 넣으면 잘려서, 이름과 시각을 두 줄로 나눈다.
+            // 아래 '더 보기' 줄은 글자가 작아 누르는 영역이 위로 넓어진다(최소 48dp).
+            // 이 두 줄도 따로 누를 수 있게 해야 눌렀을 때 '더 보기' 로 가지 않는다
+            Column(
                 modifier = Modifier.pressFade(role = Role.Button, onClick = onClick),
-            )
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = placeName,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    color = BgSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "$whenText 방문 예정 ›",
+                    style = MaterialTheme.typography.caption,
+                    color = BgSurface,
+                )
+            }
             if (otherCount > 0) {
                 Text(
                     text = "예정된 방문 ${otherCount}곳 더 보기 ›",
