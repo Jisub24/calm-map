@@ -35,7 +35,6 @@ import com.calmmap.ui.model.TimeSlot
 import com.calmmap.ui.model.VisitPlan
 import com.calmmap.ui.model.VisitUi
 import com.calmmap.ui.model.visitDayOf
-import com.calmmap.ui.model.sampleVisits
 import com.calmmap.ui.model.PlaceDetailUi
 import com.calmmap.ui.model.sampleNoDataFor
 import com.calmmap.ui.mypage.AccountScreen
@@ -130,8 +129,9 @@ fun CalmMapApp(
     var visitFrom by remember { mutableStateOf(Screen.MAP) }
     // 예정된 방문 목록에서 뒤로 가면 돌아갈 곳 (지도 띠 또는 기록 탭)
     var plansFrom by remember { mutableStateOf(Screen.MAP) }
-    // TODO: visits 테이블에 저장하면 지금은 앱을 끄면 사라진다
-    val visits = remember { mutableStateListOf<VisitUi>().apply { addAll(sampleVisits) } }
+    // 다녀와서 기록한 방문. null 이면 아직 못 읽은 것
+    var visits by remember(isGuest) { mutableStateOf<List<VisitUi>?>(if (isGuest) emptyList() else null) }
+    var visitsFailed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     // 카카오 프로필 이름. 로그인이 바뀌면 다시 읽는다
     val nickname = remember(isGuest) { AuthRepository.displayName() ?: "보호자" }
@@ -181,6 +181,19 @@ fun CalmMapApp(
             throw e
         } catch (e: Exception) {
             Log.e("CalmMap", "방문 예정 불러오기 실패: ${e.brief()}")
+        }
+    }
+    // 기록 탭 · 계정 관리에 들어올 때마다 새로 읽는다. 읽는 동안은 이전 목록을 그대로 둔다
+    LaunchedEffect(isGuest, screen == Screen.HISTORY || screen == Screen.ACCOUNT) {
+        if (isGuest || (screen != Screen.HISTORY && screen != Screen.ACCOUNT)) return@LaunchedEffect
+        visitsFailed = false
+        try {
+            visits = VisitRepository.loadHistory()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("CalmMap", "방문 기록 불러오기 실패: ${e.brief()}")
+            visitsFailed = true
         }
     }
     // 설정을 읽다가 실패했는지. '불러오는 중' 대신 실패 안내를 띄운다
@@ -305,7 +318,9 @@ fun CalmMapApp(
 
             Screen.HISTORY -> VisitHistoryScreen(
                 onTabSelect = { selectTab(it) },
-                visits = visits,
+                visits = visits.orEmpty(),
+                loading = visits == null && !visitsFailed,
+                failed = visits == null && visitsFailed,
                 plans = visitPlans,
                 onPlanClick = { openPlan(it, Screen.VISIT_CARD) },
                 onAllPlansClick = {
@@ -362,7 +377,7 @@ fun CalmMapApp(
                     Toast.makeText(context, "회원 탈퇴는 아직 준비 중이에요", Toast.LENGTH_SHORT).show()
                 },
                 joinedAt = AuthRepository.joinedAt() ?: "-",
-                visitCount = visits.size,
+                visitCount = visits?.size ?: 0,
             )
 
             // TODO: 삭제는 확인 창을 띄운 뒤 Supabase 데이터와 계정을 지운다
@@ -432,21 +447,25 @@ fun CalmMapApp(
                     AfterVisitScreen(
                         placeName = plan.place.name,
                         whenLabel = plan.whenLabel,
-                        // 기록 탭 맨 위에 새 기록을 넣는다
-                        // TODO: visits 테이블에 저장
+                        // DB 에 쓴 뒤에 기록 탭 맨 위에 새 기록을 넣는다. 기록 탭에 들어가면 DB 에서 다시 읽는다
                         onSubmit = { feeling, triggers ->
-                            visits.add(
-                                0,
+                            VisitRepository.record(plan.id ?: error("줄 번호 없는 방문 예정"), feeling, triggers)
+                            visits = listOf(
                                 VisitUi(
                                     placeName = plan.place.name,
                                     visitedAt = plan.recordLabel,
                                     feeling = feeling,
                                     trigger = triggers.joinToString(", ") { it.label }.ifEmpty { null },
+                                    visitedOn = plan.day.date,
                                 ),
-                            )
+                            ) + visits.orEmpty()
                             finishPlan(plan)
                         },
-                        onSkip = { finishPlan(plan) },
+                        // 기록 없이 넘기면 예정을 지운다. 결과 없는 줄은 기록 탭 · 학습 어디에도 쓰이지 않는다
+                        onSkip = {
+                            VisitRepository.cancel(plan.place.id)
+                            finishPlan(plan)
+                        },
                     )
                 }
             }

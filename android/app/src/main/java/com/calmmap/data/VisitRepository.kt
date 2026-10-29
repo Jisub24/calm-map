@@ -1,10 +1,18 @@
 package com.calmmap.data
 
+import com.calmmap.ui.model.HardFactor
+import com.calmmap.ui.model.VisitFeeling
+import com.calmmap.ui.model.VisitUi
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.postgrest.query.filter.FilterOperator
+import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import java.time.format.TextStyle
+import java.util.Locale
 import kotlinx.serialization.Serializable
 
 // 방문 예정과 다녀온 뒤 기록(visits)을 다룬다. 자기 것만 읽고 쓰고 지울 수 있다 (RLS)
@@ -98,6 +106,78 @@ object VisitRepository {
                     exact("result", null)
                 }
             }
+        }
+    }
+
+    /** 다녀온 뒤 기록. hard_factors 는 '힘들었어요' 일 때만 채운다 (011 규칙) */
+    @Serializable
+    private data class RecordRow(
+        val result: String,
+        val hard_factors: List<String>?,
+        val recorded_at: String,
+    )
+
+    /**
+     * 방문 예정에 다녀온 결과를 채운다. 아직 기록하지 않은 줄만 고친다.
+     * 고친 줄이 없으면(다른 기기에서 지웠거나 이미 기록함) 예외. 저장된 줄 없이 화면만 넘어가지 않게
+     */
+    suspend fun record(visitId: Long, feeling: VisitFeeling, factors: List<HardFactor>) {
+        val hard = feeling == VisitFeeling.HARD
+        val row = RecordRow(
+            result = if (hard) "hard" else "ok",
+            // '잘 모르겠어요' 는 값이 없어서 빠진다. 하나도 안 남으면 비운다
+            hard_factors = if (hard) factors.mapNotNull { it.dbValue }.ifEmpty { null } else null,
+            recorded_at = Instant.now().toString(),
+        )
+        val updated = withFreshSession {
+            supabase.from("visits").update(row) {
+                select(Columns.list("id"))
+                filter {
+                    eq("id", visitId)
+                    exact("result", null)
+                }
+            }.decodeList<IdRow>()
+        }
+        check(updated.isNotEmpty()) { "기록할 방문 예정을 찾지 못했어요" }
+    }
+
+    @Serializable
+    private data class PlaceName(val name: String)
+
+    /** 기록된 방문 한 줄. places(name) 은 place_id 로 이어진 장소 이름을 같이 받아 온 것 */
+    @Serializable
+    private data class HistoryRow(
+        val planned_at: String,
+        val result: String,
+        val hard_factors: List<String>? = null,
+        val places: PlaceName? = null,
+    )
+
+    /** 다녀와서 기록한 방문들. 방문 예정 시각이 최근인 것부터 */
+    // TODO: 지금은 전부 읽는다. 기록이 쌓이면 최근 몇 건만 받아 오고 화면은 '더 보기' 로 나눈다
+    suspend fun loadHistory(): List<VisitUi> {
+        val rows = withFreshSession {
+            supabase.from("visits")
+                .select(Columns.raw("planned_at, result, hard_factors, places(name)")) {
+                    // result 가 비어 있지 않은 줄 = 다녀와서 기록한 방문
+                    filter { filterNot("result", FilterOperator.IS, null) }
+                    order("planned_at", Order.DESCENDING)
+                }
+                .decodeList<HistoryRow>()
+        }
+        return rows.map { row ->
+            val at = OffsetDateTime.parse(row.planned_at).atZoneSameInstant(SEOUL)
+            val week = at.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.KOREAN)
+            VisitUi(
+                placeName = row.places?.name ?: "알 수 없는 장소",
+                visitedAt = "${at.monthValue}/${at.dayOfMonth} ($week) ${"%02d".format(at.hour)}:00",
+                feeling = if (row.result == "hard") VisitFeeling.HARD else VisitFeeling.OK,
+                trigger = row.hard_factors
+                    ?.mapNotNull { v -> HardFactor.entries.find { it.dbValue == v }?.label }
+                    ?.joinToString(", ")
+                    ?.ifEmpty { null },
+                visitedOn = at.toLocalDate(),
+            )
         }
     }
 
