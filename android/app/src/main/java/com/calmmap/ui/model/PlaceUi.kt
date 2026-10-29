@@ -2,7 +2,6 @@ package com.calmmap.ui.model
 
 import com.calmmap.ui.theme.SensoryLevel
 import com.naver.maps.geometry.LatLng
-import java.time.LocalDate
 
 /**
  * 화면에 그릴 장소 하나.
@@ -34,10 +33,13 @@ data class PlaceUi(
     val areaCrowd: List<Int?> = emptyList(),
     /** 이 장소에 쌓인 직접 측정 횟수 (hourly_forecast.measurement_count 합). 3회부터 확정 단계 */
     val measureCount: Int = 0,
-    /** 지도에서 고른 때. null 이면 지금 기준이다. level · description 이 이 시각 값이다 */
+    /**
+     * 지도에서 고른 때. null 이면 지금 기준이다. level · description 이 이 시각 값이다.
+     * 고른 때면 hours · areaCrowd 는 특정 날짜가 아니라 지금까지 쌓인 평일(주말) 기록으로 낸 값이다
+     */
     val slot: TimeSlot? = null,
-    /** hours · 결론 문구가 어느 날 값인지. null 이면 오늘 */
-    val date: LocalDate? = null,
+    /** 고른 때의 주변 혼잡을 낸 날 수. "지난 주말 N일 기록이에요" */
+    val areaDays: Int = 0,
 ) {
     /** 그 날 점수가 한 칸이라도 있는지. 없으면 카드 대신 정보 부족 화면으로 보낸다 */
     val hasForecast: Boolean

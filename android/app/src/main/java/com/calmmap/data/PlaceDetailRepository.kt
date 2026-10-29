@@ -93,24 +93,31 @@ object PlaceDetailRepository {
     )
 
     /**
-     * [day] 의 [hour] 시 기준으로 읽는다. 지도에서 시간을 고르지 않았으면 오늘 · 지금 시각,
-     * 골랐으면 그 날(PlaceUi.date) · 그 시각이다
+     * 지도에서 시간을 고르지 않았으면 오늘 줄(hourly_forecast)의 [nowHour] 시,
+     * 골랐으면(PlaceUi.slot) 쌓인 평일/주말 줄(slot_forecast)의 그 시각 기준으로 읽는다
      */
-    suspend fun load(place: PlaceUi, hour: Int, day: LocalDate = LocalDate.now(SEOUL)): PlaceDetailUi =
-        withFreshSession { read(place, hour, day) }
+    suspend fun load(place: PlaceUi, nowHour: Int): PlaceDetailUi = withFreshSession { read(place, nowHour) }
 
-    private suspend fun read(place: PlaceUi, hour: Int, day: LocalDate): PlaceDetailUi = coroutineScope {
-        val today = day.toString()
+    private suspend fun read(place: PlaceUi, nowHour: Int): PlaceDetailUi = coroutineScope {
+        val slot = place.slot
+        val hour = slot?.hour ?: nowHour
+        val today = LocalDate.now(SEOUL)
+        val dayType = slot?.groupLabel ?: if (today.dayOfWeek.value >= 6) "주말" else "평일"
 
         val forecast = async {
-            supabase.from("hourly_forecast")
-                .select(
-                    Columns.list(
-                        "hour", "status", "level", "is_estimated", "total_score", "main_factor", "measurement_count",
-                        "area_crowd_level", "score_crowd", "score_loudness", "score_sound", "score_light",
-                    ),
-                ) { filter { eq("place_id", place.id); eq("date", today) } }
-                .decodeList<ForecastRow>()
+            val columns = Columns.list(
+                "hour", "status", "level", "is_estimated", "total_score", "main_factor", "measurement_count",
+                "area_crowd_level", "score_crowd", "score_loudness", "score_sound", "score_light",
+            )
+            if (slot == null) {
+                supabase.from("hourly_forecast")
+                    .select(columns) { filter { eq("place_id", place.id); eq("date", today.toString()) } }
+                    .decodeList<ForecastRow>()
+            } else {
+                supabase.from("slot_forecast")
+                    .select(columns) { filter { eq("place_id", place.id); eq("day_group", slot.dayGroup) } }
+                    .decodeList<ForecastRow>()
+            }
         }
         val placeRow = async {
             supabase.from("places")
@@ -176,7 +183,7 @@ object PlaceDetailRepository {
         val areaName = area.await()?.area_nm?.substringBefore("(")?.trim() ?: "주변 지역"
 
         PlaceDetailUi(
-            score = scoreOf(rows, hour, day, m, place, areaName, commercialRow, categories),
+            score = scoreOf(rows, hour, dayType, m, place, areaName, commercialRow, categories),
             sounds = soundRowsOf(soundRows, m),
             measureCount = m?.measurement_count ?: soundRows.maxOfOrNull { it.measurement_count },
             light = lightOf(rows, hour, m),
@@ -195,7 +202,8 @@ object PlaceDetailRepository {
     private fun scoreOf(
         rows: List<ForecastRow>,
         nowHour: Int,
-        day: LocalDate,
+        /** "주말" · "평일" */
+        dayType: String,
         m: MeasureSummaryRow?,
         place: PlaceUi,
         areaName: String,
@@ -205,7 +213,6 @@ object PlaceDetailRepository {
         val r = nowRow(rows, nowHour) ?: return null
         val main = r.main_factor
         val crowdNote = m?.crowd_median?.let { "측정한 분들 답 · ${crowdWord(it)}" }
-        val dayType = if (day.dayOfWeek.value >= 6) "주말" else "평일"
 
         // 업종 상권이 있으면 그것, 없으면(병원 · 백화점) 지역 전체 상권
         val mids = COMMERCIAL_CATEGORY_MAP[place.category].orEmpty()

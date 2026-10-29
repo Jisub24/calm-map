@@ -1,5 +1,6 @@
 package com.calmmap.data
 
+import android.util.Log
 import com.calmmap.ui.model.HourBar
 import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.TimeSlot
@@ -20,8 +21,8 @@ import java.time.ZonedDateTime
  *
  *   places           이름 · 좌표 · 업종
  *   place_hours      영업시간 → "영업 중" 표시
- *   hourly_forecast  batch 가 20분마다 채우는 시간대별 점수 → 마커 단계 · 그래프 · 결론 문구
- *                    오늘과, 평일 · 주말 중 오늘이 아닌 쪽의 가장 가까운 날을 같이 읽는다 (시간 선택용)
+ *   hourly_forecast  batch 가 20분마다 채우는 오늘의 시간대별 점수 → '지금' 마커 단계 · 그래프 · 결론 문구
+ *   slot_forecast    날짜 없이 평일/주말 × 시각으로 낸 점수 · 주변 혼잡 → 지도 '시간 선택'
  *
  * 시각은 서울 기준으로 잡는다. hourly_forecast 의 date · hour 가 한국 시각으로 들어 있어서,
  * 폰 시간대가 다르면(에뮬레이터는 UTC) 엉뚱한 칸을 읽게 된다.
@@ -56,15 +57,15 @@ object PlaceRepository {
     )
 
     /**
-     * hourly_forecast 한 줄 = 장소 하나의 한 시각.
+     * hourly_forecast · slot_forecast 한 줄 = 장소 하나의 한 시각. 두 표가 같은 칸을 쓴다.
      *   status   level(단계 확정) / estimate(후보 · 추정, 점선) / insufficient(정보 부족)
      *   level    calm / normal / high. status 가 level 일 때만 값이 있다
      */
     @Serializable
     private data class ForecastRow(
         val place_id: Long,
-        /** "2026-10-31" */
-        val date: String,
+        /** slot_forecast 만. weekday / weekend */
+        val day_group: String? = null,
         val hour: Int,
         val status: String,
         val level: String? = null,
@@ -74,6 +75,8 @@ object PlaceRepository {
         val measurement_count: Int = 0,
         /** 주변 지역 혼잡 1(여유)~4(붐빔). 서울시 예측이 12시간 앞까지라 없는 시각도 있다 */
         val area_crowd_level: Int? = null,
+        /** slot_forecast 만. area_crowd_level 을 낸 날 수 */
+        val area_days: Int = 0,
     )
 
     /**
@@ -93,9 +96,8 @@ object PlaceRepository {
     suspend fun loadAll(now: ZonedDateTime = ZonedDateTime.now(SEOUL)): MapPlaces = withFreshSession { read(now) }
 
     private suspend fun read(now: ZonedDateTime): MapPlaces = coroutineScope {
-        val today = now.toLocalDate()
-        val otherDay = otherGroupDay(today)
-        // 세 표를 동시에 읽는다
+        val today = now.toLocalDate().toString()
+        // 네 표를 동시에 읽는다
         val places = async {
             supabase.from("places")
                 .select(Columns.list("id", "name", "category", "lat", "lng"))
@@ -113,48 +115,49 @@ object PlaceRepository {
                         "place_id", "date", "hour", "status", "level", "is_estimated",
                         "total_score", "main_factor", "measurement_count", "area_crowd_level",
                     ),
-                ) { filter { isIn("date", listOf(today.toString(), otherDay.toString())) } }
+                ) { filter { eq("date", today) } }
                 .decodeList<ForecastRow>()
+        }
+        // 시간 선택용. 못 읽어도(026 실행 전 등) '지금' 지도는 뜨게 빈 목록으로 둔다
+        val slots = async {
+            runCatching {
+                supabase.from("slot_forecast")
+                    .select(
+                        Columns.list(
+                            "place_id", "day_group", "hour", "status", "level", "is_estimated",
+                            "total_score", "main_factor", "measurement_count", "area_crowd_level", "area_days",
+                        ),
+                    )
+                    .decodeList<ForecastRow>()
+            }.onFailure { Log.w("CalmMap", "시간 선택 값 읽기 실패: ${it.brief()}") }.getOrElse { emptyList() }
         }
         val placeRows = places.await()
         val hoursByPlace = hours.await().groupBy { it.place_id }
-        // 날짜 → 장소 → 그 날 줄들
-        val forecastByDay = forecast.await().groupBy { it.date }.mapValues { (_, rows) -> rows.groupBy { it.place_id } }
+        val todayByPlace = forecast.await().groupBy { it.place_id }
+        // 평일/주말 → 장소 → 그 묶음 줄들
+        val slotsByGroup = slots.await().groupBy { it.day_group }.mapValues { (_, rows) -> rows.groupBy { it.place_id } }
 
         MapPlaces { slot ->
-            // 고른 쪽이 오늘과 같은 묶음(평일 · 주말)이면 오늘, 아니면 그쪽의 가장 가까운 날
-            val day = if (slot == null || slot.weekend == isWeekend(today)) today else otherDay
-            val byPlace = forecastByDay[day.toString()].orEmpty()
-            placeRows.map { row -> placeUi(row, byPlace[row.id].orEmpty(), hoursByPlace[row.id], now, day, slot) }
+            val byPlace = if (slot == null) todayByPlace else slotsByGroup[slot.dayGroup].orEmpty()
+            placeRows.map { row -> placeUi(row, byPlace[row.id].orEmpty(), hoursByPlace[row.id], now, slot) }
         }
-    }
-
-    /**
-     * 평일 · 주말 중 [today] 가 아닌 쪽의 가장 가까운 날. 평일이면 다가오는 토요일, 주말이면 다가오는 월요일.
-     * batch/forecast.py 의 other_group_day 가 이 날 줄을 써 둔다. 둘을 같이 고친다
-     */
-    fun otherGroupDay(today: LocalDate): LocalDate {
-        val dow = today.dayOfWeek.value // 월=1 … 일=7
-        return today.plusDays((if (isWeekend(today)) 8 - dow else 6 - dow).toLong())
     }
 
     fun isWeekend(day: LocalDate): Boolean = day.dayOfWeek.value >= 6
 
     /**
-     * 장소 하나를 [day] 의 줄로 화면 값으로 바꾼다.
-     *   지금([slot] 이 null)   지금 시각 칸. 비어 있으면 가장 가까운 시각의 단계 · 후보
-     *   고른 때               그 시각 칸만. 비어 있으면 정보 부족 (다른 시각 값을 그 시각처럼 보이지 않게)
+     * 장소 하나를 화면 값으로 바꾼다.
+     *   지금([slot] 이 null)   오늘 줄. 지금 시각 칸이 비어 있으면 가장 가까운 시각의 단계 · 후보
+     *   고른 때               slot_forecast 줄. 그 시각 칸만. 비어 있으면 정보 부족 (다른 시각 값을 그 시각처럼 보이지 않게)
      */
     private fun placeUi(
         row: PlaceRow,
         rows: List<ForecastRow>,
         hours: List<HoursRow>?,
         now: ZonedDateTime,
-        day: LocalDate,
         slot: TimeSlot?,
     ): PlaceUi {
         val byHour = rows.associateBy { it.hour }
-        val isToday = day == now.toLocalDate()
         val pickedRow = if (slot != null) {
             byHour[slot.hour]
         } else {
@@ -167,8 +170,8 @@ object PlaceRepository {
         }
         val level = levelOf(pickedRow)
         val measured = rows.sumOf { it.measurement_count }
-        // 영업 중인지도 그때 기준으로. 고른 시각은 그 시각 30분으로 본다
-        val openAt = if (slot == null) now.toLocalDateTime() else day.atTime(slot.hour, 30)
+        // 영업 중인지도 그때 기준으로. 고른 때는 그 묶음의 가장 가까운 날 그 시각 30분으로 본다 (화면에 날짜는 안 나온다)
+        val openAt = if (slot == null) now.toLocalDateTime() else nextDayOf(now.toLocalDate(), slot.weekend).atTime(slot.hour, 30)
         return PlaceUi(
             id = row.id,
             name = row.name,
@@ -186,10 +189,10 @@ object PlaceRepository {
             openNow = hours?.let { isOpen(it, openAt) },
             recommendation = recommend(
                 byHour = byHour,
-                nowHour = if (isToday) now.hour else null,
+                nowHour = if (slot == null) now.hour else null,
                 dayWord = when {
-                    isToday -> "오늘은"
-                    isWeekend(day) -> "주말에는"
+                    slot == null -> "오늘은"
+                    slot.weekend -> "주말에는"
                     else -> "평일에는"
                 },
             ),
@@ -198,9 +201,13 @@ object PlaceRepository {
             areaCrowd = if (rows.isEmpty()) emptyList() else CHART_HOURS.map { byHour[it]?.area_crowd_level },
             measureCount = measured,
             slot = slot,
-            date = day,
+            areaDays = rows.maxOfOrNull { it.area_days } ?: 0,
         )
     }
+
+    /** [from] 부터 세어 평일(주말)인 첫날 */
+    private fun nextDayOf(from: LocalDate, weekend: Boolean): LocalDate =
+        generateSequence(from) { it.plusDays(1) }.first { isWeekend(it) == weekend }
 
     // ── hourly_forecast → 화면 값 ──────────────────────────
 

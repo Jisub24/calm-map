@@ -155,9 +155,9 @@ fun MapScreen(
         else selectedPlace = place
     }
 
-    // '지금 무던한 곳' 은 부담 높음 · 정보 부족을 뺀다.
-    // TODO: hourly_forecast 를 붙이면 '오늘 중 무던한 시간대가 있는가' 로 바꾼다
-    val calmNow = places.filter { it.level != SensoryLevel.NO_DATA && it.level != SensoryLevel.HIGH }
+    // '지금 무던한 곳' 은 무던함만 센다. 보통 · 후보는 '그 밖의 장소'.
+    // 무던함은 실측으로 확인된 시간대에만 쓴다 (답변서2 질의1)
+    val calmNow = places.filter { it.level == SensoryLevel.CALM }
 
     Column(modifier = modifier.fillMaxSize().background(BgSurface)) {
         Box(modifier = Modifier.weight(1f)) {
@@ -234,7 +234,6 @@ fun MapScreen(
                 if (picked == null && timeOpen) {
                     TimeSlotSheet(
                         initial = slot ?: TimeSlot(weekend = todayWeekend, hour = nowHour.coerceIn(8, 22)),
-                        todayWeekend = todayWeekend,
                         onChange = onSlotChange,
                         onClose = { timeOpen = false },
                     )

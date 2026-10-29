@@ -51,8 +51,6 @@ private val SLOT_HOURS = (8..22).toList()
 @Composable
 internal fun TimeSlotSheet(
     initial: TimeSlot,
-    /** 오늘이 주말인지. 오늘과 다른 쪽을 고르면 다가오는 날 기준이라고 알린다 */
-    todayWeekend: Boolean,
     onChange: (TimeSlot) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
@@ -86,7 +84,7 @@ internal fun TimeSlotSheet(
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(text = "시간 선택", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
-            Text(text = "고른 시간 기준으로 지도에 보여드려요", style = MaterialTheme.typography.caption, color = TextTertiary)
+            Text(text = "지금까지 쌓인 평일 · 주말 기록으로 보여드려요", style = MaterialTheme.typography.caption, color = TextTertiary)
         }
 
         FullSegmented(
@@ -94,13 +92,6 @@ internal fun TimeSlotSheet(
             selectedIndex = if (weekend) 1 else 0,
             onSelect = { pick(newWeekend = it == 1) },
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp),
-        )
-        // 오늘이 아닌 쪽은 batch 가 계산해 둔 가장 가까운 날 값이다 (영업시간이 그 요일 기준)
-        Text(
-            text = if (weekend == todayWeekend) "오늘 기준이에요" else "다가오는 ${if (weekend) "토요일" else "월요일"} 기준이에요",
-            style = MaterialTheme.typography.caption,
-            color = TextTertiary,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp),
         )
 
         // 시트 양옆 여백 안에서 잘리지 않고 화면 끝까지 넘어가도록 여백은 목록 안쪽에 준다
