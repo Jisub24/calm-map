@@ -278,7 +278,7 @@ fun MapScreen(
  * 띠를 누르면 미리 보는 카드(출발하러 가는 길), '다녀왔어요' 는 다녀온 뒤 기록으로 가는 길이다.
  *
  * 계획이 여러 개여도 가장 가까운 하나만 보여준다. 띠를 여러 줄 쌓으면 지도가 가려진다.
- * 나머지가 있으면 둘째 줄 "예정된 방문 N곳 더 보기" 로 목록을 연다
+ * 나머지가 있으면 시각 줄 끝 "N곳 더" 로 목록을 연다
  */
 @Composable
 private fun VisitBanner(
@@ -301,25 +301,37 @@ private fun VisitBanner(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        // 장소 이름이 길어 한 줄에 시각까지 넣으면 잘려서, 이름과 시각을 두 줄로 나눈다.
+        // 다른 예정이 있으면 셋째 줄을 만들지 않고 시각 줄 끝에 "1곳 더" 를 붙인다
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .pressFade(role = Role.Button, onClick = onClick),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             Text(
-                text = "$placeName · $whenText 방문 예정 ›",
+                text = placeName,
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
                 color = BgSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                // 둘째 줄은 글자가 작아 누르는 영역이 위로 넓어진다(최소 48dp).
-                // 첫 줄도 따로 누를 수 있게 해야 첫 줄을 눌렀을 때 둘째 줄로 가지 않는다
-                modifier = Modifier.pressFade(role = Role.Button, onClick = onClick),
             )
-            if (otherCount > 0) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "예정된 방문 ${otherCount}곳 더 보기 ›",
+                    text = "$whenText 방문 예정 ›",
                     style = MaterialTheme.typography.caption,
-                    color = BorderStrong,
-                    modifier = Modifier.pressFade(role = Role.Button, onClick = onOtherClick),
+                    color = BgSurface,
                 )
+                if (otherCount > 0) {
+                    Text(
+                        text = "  ·  ${otherCount}곳 더 ›",
+                        style = MaterialTheme.typography.caption,
+                        color = BorderStrong,
+                        // 띠 전체가 카드로 가는 버튼이라, 이 글자만 따로 눌러야 목록으로 간다
+                        modifier = Modifier.pressFade(role = Role.Button, onClick = onOtherClick),
+                    )
+                }
             }
         }
         Text(

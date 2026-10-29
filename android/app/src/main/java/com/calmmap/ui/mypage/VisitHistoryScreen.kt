@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +47,8 @@ import com.calmmap.ui.theme.TextPrimary
 import com.calmmap.ui.theme.TextSecondary
 import com.calmmap.ui.theme.TextTertiary
 import com.calmmap.ui.theme.caption
+import java.time.YearMonth
+import java.time.ZoneId
 
 /** 최종안 17 방문 기록: 이번 달 요약 · 예정된 방문(가장 가까운 1개) · 지난 방문 */
 @Composable
@@ -56,7 +59,15 @@ fun VisitHistoryScreen(
     plans: List<VisitPlan> = emptyList(),
     onPlanClick: (VisitPlan) -> Unit = {},
     onAllPlansClick: () -> Unit = {},
+    /** 지난 방문을 아직 못 읽었는지 · 읽다가 실패했는지 */
+    loading: Boolean = false,
+    failed: Boolean = false,
 ) {
+    // 이번 달 것만 센다. 날짜가 없는 예시 기록은 모두 센다
+    val thisMonth = remember(visits) {
+        val now = YearMonth.now(ZoneId.of("Asia/Seoul"))
+        visits.filter { v -> v.visitedOn?.let { YearMonth.from(it) == now } ?: true }
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -72,10 +83,9 @@ fun VisitHistoryScreen(
                 .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // TODO: 지금은 목록 전체를 센다. 데이터가 붙으면 이번 달 것만 센다
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatTile("이번 달 외출", "${visits.size}회", Modifier.weight(1f))
-                StatTile("괜찮았어요", "${visits.count { it.feeling == VisitFeeling.OK }}회", Modifier.weight(1f))
+                StatTile("이번 달 외출", "${thisMonth.size}회", Modifier.weight(1f))
+                StatTile("괜찮았어요", "${thisMonth.count { it.feeling == VisitFeeling.OK }}회", Modifier.weight(1f))
             }
 
             plans.firstOrNull()?.let { next ->
@@ -101,7 +111,11 @@ fun VisitHistoryScreen(
             ) {
                 if (visits.isEmpty()) {
                     Text(
-                        text = "아직 다녀온 곳이 없어요",
+                        text = when {
+                            loading -> "방문 기록을 불러오는 중이에요"
+                            failed -> "기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요"
+                            else -> "아직 다녀온 곳이 없어요"
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextTertiary,
                         modifier = Modifier.padding(vertical = 20.dp),

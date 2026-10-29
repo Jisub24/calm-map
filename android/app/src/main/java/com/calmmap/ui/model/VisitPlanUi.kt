@@ -4,26 +4,46 @@ import com.calmmap.ui.component.CalmIcons
 
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.TextStyle
 import java.util.Locale
 
-/** 방문 시간 선택에서 고르는 날짜 칩 하나. "오늘" · "내일" · "토" · "일" */
+// '오늘' 은 서울 기준. 폰 시간대가 다르면(에뮬레이터는 UTC) 아침에 어제 날짜가 오늘로 잡힌다
+private val SEOUL: ZoneId = ZoneId.of("Asia/Seoul")
+
+/** 방문 시간 선택에서 고르는 날짜 칩 하나. "오늘" · "내일" · "토" · "11/7" */
 data class VisitDay(val label: String, val date: LocalDate)
 
-/** 오늘 · 내일 · 다가오는 토 · 일. 토 · 일이 오늘이나 내일과 겹치면 그다음 주로 */
-fun upcomingVisitDays(today: LocalDate = LocalDate.now()): List<VisitDay> {
+/**
+ * 오늘 · 내일 · 내일 다음의 가장 가까운 토 · 일. 날짜순으로 둔다.
+ * 이름은 visitDayOf 와 같아서, 일주일 넘게 남은 날은 "11/7" 처럼 날짜로 나온다.
+ * 금요일이면 '내일(토)' 과 다음 주 토요일이 둘 다 "토" 로 보이던 것을 막는다
+ */
+fun upcomingVisitDays(today: LocalDate = LocalDate.now(SEOUL)): List<VisitDay> {
     val tomorrow = today.plusDays(1)
     fun nextAfterTomorrow(day: DayOfWeek): LocalDate {
         var date = tomorrow.plusDays(1)
         while (date.dayOfWeek != day) date = date.plusDays(1)
         return date
     }
-    return listOf(
-        VisitDay("오늘", today),
-        VisitDay("내일", tomorrow),
-        VisitDay("토", nextAfterTomorrow(DayOfWeek.SATURDAY)),
-        VisitDay("일", nextAfterTomorrow(DayOfWeek.SUNDAY)),
-    )
+    return listOf(today, tomorrow, nextAfterTomorrow(DayOfWeek.SATURDAY), nextAfterTomorrow(DayOfWeek.SUNDAY))
+        .sorted()
+        .map { visitDayOf(it, today) }
+}
+
+/**
+ * DB 에서 읽은 날짜를 날짜 칩과 같은 이름으로. 오늘 · 내일 · 어제, 일주일 안이면 "토", 그 밖은 "11/8"
+ */
+fun visitDayOf(date: LocalDate, today: LocalDate = LocalDate.now(SEOUL)): VisitDay {
+    val label = when {
+        date == today -> "오늘"
+        date == today.plusDays(1) -> "내일"
+        date == today.minusDays(1) -> "어제"
+        date.isAfter(today) && date.isBefore(today.plusDays(7)) ->
+            date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.KOREAN)
+        else -> "${date.monthValue}/${date.dayOfMonth}"
+    }
+    return VisitDay(label, date)
 }
 
 /** 정해 둔 방문. 지도 위 '방문 예정' 띠와 미리 보는 카드 · 현장 모드 · 방문 후 기록이 같이 쓴다 */
@@ -31,6 +51,8 @@ data class VisitPlan(
     val place: PlaceUi,
     val day: VisitDay,
     val hour: Int,
+    /** visits 줄 번호. 취소 · 기록할 때 이것으로 찾는다. 미리보기용은 null */
+    val id: Long? = null,
 ) {
     /** "오늘 15:00" */
     val whenLabel: String get() = "${day.label} ${"%02d".format(hour)}:00"
@@ -69,5 +91,16 @@ val sampleQuietSpots = listOf(
     QuietSpot("비상계단 앞 복도", "약 15m"),
 )
 
-/** 방문 후 기록에서 고르는 '무엇이 힘들었나요' */
-val visitTriggers = listOf("갑작스러운 소리", "사람 많음", "밝은 조명", "기다림", "잘 모르겠어요")
+/**
+ * 방문 후 기록에서 고르는 '무엇이 힘들었나요'. dbValue 는 visits.hard_factors 에 들어가는 값 (011 규칙과 같게).
+ * '잘 모르겠어요' 는 DB 에 넣지 않고 비워 둔다
+ */
+enum class HardFactor(val label: String, val dbValue: String?) {
+    ANNOUNCEMENT("안내방송", "announcement"),
+    SPEECH("말소리", "speech"),
+    MUSIC("음악", "music"),
+    MACHINE("기계음", "machine"),
+    SUDDEN("갑작스러운 소리", "sudden"),
+    CROWD("사람 많음", "crowd"),
+    UNKNOWN("잘 모르겠어요", null),
+}

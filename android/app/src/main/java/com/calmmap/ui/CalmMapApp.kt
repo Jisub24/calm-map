@@ -19,6 +19,7 @@ import com.calmmap.data.MeasurementRepository
 import com.calmmap.data.PlaceDetailRepository
 import com.calmmap.data.PlaceRepository
 import com.calmmap.data.ProfileRepository
+import com.calmmap.data.VisitRepository
 import com.calmmap.data.brief
 import com.calmmap.ui.component.LoginRequiredSheet
 import com.calmmap.ui.component.MainTab
@@ -33,7 +34,7 @@ import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.TimeSlot
 import com.calmmap.ui.model.VisitPlan
 import com.calmmap.ui.model.VisitUi
-import com.calmmap.ui.model.sampleVisits
+import com.calmmap.ui.model.visitDayOf
 import com.calmmap.ui.model.PlaceDetailUi
 import com.calmmap.ui.model.sampleNoDataFor
 import com.calmmap.ui.mypage.AccountScreen
@@ -118,7 +119,7 @@ fun CalmMapApp(
     // 방문 시간을 고를 장소
     var visitPlace by remember { mutableStateOf<PlaceUi?>(null) }
     // 정해 둔 방문들. 가까운 시간이 앞에 오게 정렬해 둔다
-    // TODO: 저장하지 않아서 앱을 끄면 사라진다
+    // 정할 때 visits 에 저장하고, 앱을 켜면 visits 에서 다시 읽어 온다
     val visitPlans = remember { mutableStateListOf<VisitPlan>() }
     // 지금 카드 · 현장 모드 · 기록에서 다루는 방문
     var activePlan by remember { mutableStateOf<VisitPlan?>(null) }
@@ -128,8 +129,9 @@ fun CalmMapApp(
     var visitFrom by remember { mutableStateOf(Screen.MAP) }
     // 예정된 방문 목록에서 뒤로 가면 돌아갈 곳 (지도 띠 또는 기록 탭)
     var plansFrom by remember { mutableStateOf(Screen.MAP) }
-    // TODO: visits 테이블에 저장하면 지금은 앱을 끄면 사라진다
-    val visits = remember { mutableStateListOf<VisitUi>().apply { addAll(sampleVisits) } }
+    // 다녀와서 기록한 방문. null 이면 아직 못 읽은 것
+    var visits by remember(isGuest) { mutableStateOf<List<VisitUi>?>(if (isGuest) emptyList() else null) }
+    var visitsFailed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     // 카카오 프로필 이름. 로그인이 바뀌면 다시 읽는다
     val nickname = remember(isGuest) { AuthRepository.displayName() ?: "보호자" }
@@ -157,6 +159,41 @@ fun CalmMapApp(
             Log.e("CalmMap", "장소 불러오기 실패: ${e.brief()}")
             val message = if (mapPlaces == null) "장소를 불러오지 못했어요" else "최신 정보를 불러오지 못했어요"
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+    // DB 의 방문 예정을 이번 로그인에서 읽었는지. 실패하면 false 로 남아 다음에 지도로 올 때 다시 읽는다
+    var visitsLoaded by remember(isGuest) { mutableStateOf(false) }
+    // 로그인한 상태로 지도에 오면 한 번 읽는다. 장소 정보(이름 · 그래프)를 붙여야 해서 장소를 읽은 뒤에
+    LaunchedEffect(isGuest, places != null, screen == Screen.MAP) {
+        if (isGuest || visitsLoaded || places == null || screen != Screen.MAP) return@LaunchedEffect
+        try {
+            val byId = places.associateBy { it.id }
+            val loaded = VisitRepository.loadPlanned().mapNotNull { row ->
+                // 지도에 없는 장소(지워졌거나 아직 못 읽은 곳)의 예정은 띠에 띄울 수 없어서 뺀다
+                val place = byId[row.placeId] ?: return@mapNotNull null
+                VisitPlan(place, visitDayOf(row.date), row.hour, row.id)
+            }
+            // 읽는 사이에 새로 정한 예정이 있으면 그것을 남긴다
+            visitPlans.addAll(loaded.filter { new -> visitPlans.none { it.place.id == new.place.id } })
+            visitPlans.sortWith(compareBy({ it.day.date }, { it.hour }))
+            visitsLoaded = true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("CalmMap", "방문 예정 불러오기 실패: ${e.brief()}")
+        }
+    }
+    // 기록 탭 · 계정 관리에 들어올 때마다 새로 읽는다. 읽는 동안은 이전 목록을 그대로 둔다
+    LaunchedEffect(isGuest, screen == Screen.HISTORY || screen == Screen.ACCOUNT) {
+        if (isGuest || (screen != Screen.HISTORY && screen != Screen.ACCOUNT)) return@LaunchedEffect
+        visitsFailed = false
+        try {
+            visits = VisitRepository.loadHistory()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("CalmMap", "방문 기록 불러오기 실패: ${e.brief()}")
+            visitsFailed = true
         }
     }
     // 설정을 읽다가 실패했는지. '불러오는 중' 대신 실패 안내를 띄운다
@@ -281,7 +318,9 @@ fun CalmMapApp(
 
             Screen.HISTORY -> VisitHistoryScreen(
                 onTabSelect = { selectTab(it) },
-                visits = visits,
+                visits = visits.orEmpty(),
+                loading = visits == null && !visitsFailed,
+                failed = visits == null && visitsFailed,
                 plans = visitPlans,
                 onPlanClick = { openPlan(it, Screen.VISIT_CARD) },
                 onAllPlansClick = {
@@ -338,7 +377,7 @@ fun CalmMapApp(
                     Toast.makeText(context, "회원 탈퇴는 아직 준비 중이에요", Toast.LENGTH_SHORT).show()
                 },
                 joinedAt = AuthRepository.joinedAt() ?: "-",
-                visitCount = visits.size,
+                visitCount = visits?.size ?: 0,
             )
 
             // TODO: 삭제는 확인 창을 띄운 뒤 Supabase 데이터와 계정을 지운다
@@ -356,8 +395,10 @@ fun CalmMapApp(
                         place = place,
                         nowHour = nowHour,
                         onBack = { screen = visitFrom },
+                        // DB 에 들어간 뒤에야 지도로. 같은 장소의 예정이 있으면 새 줄 대신 시각만 바꾼다
                         onConfirm = { day, hour ->
-                            addPlan(VisitPlan(place, day, hour))
+                            val id = VisitRepository.plan(place.id, day.date, hour)
+                            addPlan(VisitPlan(place, day, hour, id))
                             // 계획만 잡고 지도로. 갈 때 '방문 예정' 띠를 눌러 카드를 연다
                             screen = Screen.MAP
                         },
@@ -370,11 +411,24 @@ fun CalmMapApp(
                 onBack = { screen = cardFrom },
                 onChildViewClick = { screen = Screen.VISIT_CHILD },
                 onDepartClick = { screen = Screen.VISIT_ONSITE },
-                // 그 계획만 빼고 들어온 곳으로. 목록이 비면 지도로
+                // DB 에서 지운 뒤에 그 계획만 빼고 들어온 곳으로. 목록이 비면 지도로.
+                // 못 지우면 카드에 남는다. 앱에서만 빼면 다시 켰을 때 취소한 예정이 돌아온다
                 onCancelVisit = {
-                    activePlan?.let { visitPlans.remove(it) }
-                    activePlan = null
-                    screen = if (cardFrom == Screen.VISIT_PLANS && visitPlans.isEmpty()) Screen.MAP else cardFrom
+                    val plan = activePlan
+                    if (plan != null) scope.launch {
+                        try {
+                            VisitRepository.cancel(plan.place.id)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.w("CalmMap", "방문 취소 실패: ${e.brief()}")
+                            Toast.makeText(context, "취소하지 못했어요. 인터넷 연결을 확인해 주세요", Toast.LENGTH_SHORT).show()
+                            return@launch
+                        }
+                        visitPlans.remove(plan)
+                        activePlan = null
+                        screen = if (cardFrom == Screen.VISIT_PLANS && visitPlans.isEmpty()) Screen.MAP else cardFrom
+                    }
                 },
             )
 
@@ -393,21 +447,25 @@ fun CalmMapApp(
                     AfterVisitScreen(
                         placeName = plan.place.name,
                         whenLabel = plan.whenLabel,
-                        // 기록 탭 맨 위에 새 기록을 넣는다
-                        // TODO: visits 테이블에 저장
+                        // DB 에 쓴 뒤에 기록 탭 맨 위에 새 기록을 넣는다. 기록 탭에 들어가면 DB 에서 다시 읽는다
                         onSubmit = { feeling, triggers ->
-                            visits.add(
-                                0,
+                            VisitRepository.record(plan.id ?: error("줄 번호 없는 방문 예정"), feeling, triggers)
+                            visits = listOf(
                                 VisitUi(
                                     placeName = plan.place.name,
                                     visitedAt = plan.recordLabel,
                                     feeling = feeling,
-                                    trigger = triggers.joinToString(", ").ifEmpty { null },
+                                    trigger = triggers.joinToString(", ") { it.label }.ifEmpty { null },
+                                    visitedOn = plan.day.date,
                                 ),
-                            )
+                            ) + visits.orEmpty()
                             finishPlan(plan)
                         },
-                        onSkip = { finishPlan(plan) },
+                        // 기록 없이 넘기면 예정을 지운다. 결과 없는 줄은 기록 탭 · 학습 어디에도 쓰이지 않는다
+                        onSkip = {
+                            VisitRepository.cancel(plan.place.id)
+                            finishPlan(plan)
+                        },
                     )
                 }
             }
