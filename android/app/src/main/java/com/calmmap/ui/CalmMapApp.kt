@@ -34,6 +34,7 @@ import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.TimeSlot
 import com.calmmap.ui.model.VisitPlan
 import com.calmmap.ui.model.VisitUi
+import com.calmmap.ui.model.visitDayOf
 import com.calmmap.ui.model.sampleVisits
 import com.calmmap.ui.model.PlaceDetailUi
 import com.calmmap.ui.model.sampleNoDataFor
@@ -119,7 +120,7 @@ fun CalmMapApp(
     // 방문 시간을 고를 장소
     var visitPlace by remember { mutableStateOf<PlaceUi?>(null) }
     // 정해 둔 방문들. 가까운 시간이 앞에 오게 정렬해 둔다
-    // TODO: 정할 때 visits 에 저장한다. 앱을 다시 켰을 때 읽어오는 것은 다음 작업
+    // 정할 때 visits 에 저장하고, 앱을 켜면 visits 에서 다시 읽어 온다
     val visitPlans = remember { mutableStateListOf<VisitPlan>() }
     // 지금 카드 · 현장 모드 · 기록에서 다루는 방문
     var activePlan by remember { mutableStateOf<VisitPlan?>(null) }
@@ -158,6 +159,28 @@ fun CalmMapApp(
             Log.e("CalmMap", "장소 불러오기 실패: ${e.brief()}")
             val message = if (mapPlaces == null) "장소를 불러오지 못했어요" else "최신 정보를 불러오지 못했어요"
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+    // DB 의 방문 예정을 이번 로그인에서 읽었는지. 실패하면 false 로 남아 다음에 지도로 올 때 다시 읽는다
+    var visitsLoaded by remember(isGuest) { mutableStateOf(false) }
+    // 로그인한 상태로 지도에 오면 한 번 읽는다. 장소 정보(이름 · 그래프)를 붙여야 해서 장소를 읽은 뒤에
+    LaunchedEffect(isGuest, places != null, screen == Screen.MAP) {
+        if (isGuest || visitsLoaded || places == null || screen != Screen.MAP) return@LaunchedEffect
+        try {
+            val byId = places.associateBy { it.id }
+            val loaded = VisitRepository.loadPlanned().mapNotNull { row ->
+                // 지도에 없는 장소(지워졌거나 아직 못 읽은 곳)의 예정은 띠에 띄울 수 없어서 뺀다
+                val place = byId[row.placeId] ?: return@mapNotNull null
+                VisitPlan(place, visitDayOf(row.date), row.hour, row.id)
+            }
+            // 읽는 사이에 새로 정한 예정이 있으면 그것을 남긴다
+            visitPlans.addAll(loaded.filter { new -> visitPlans.none { it.place.id == new.place.id } })
+            visitPlans.sortWith(compareBy({ it.day.date }, { it.hour }))
+            visitsLoaded = true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("CalmMap", "방문 예정 불러오기 실패: ${e.brief()}")
         }
     }
     // 설정을 읽다가 실패했는지. '불러오는 중' 대신 실패 안내를 띄운다
@@ -359,13 +382,7 @@ fun CalmMapApp(
                         onBack = { screen = visitFrom },
                         // DB 에 들어간 뒤에야 지도로. 같은 장소의 예정이 있으면 새 줄 대신 시각만 바꾼다
                         onConfirm = { day, hour ->
-                            val before = visitPlans.find { it.place.id == place.id }?.id
-                            val id = if (before != null) {
-                                VisitRepository.reschedule(before, day.date, hour)
-                                before
-                            } else {
-                                VisitRepository.add(place.id, day.date, hour)
-                            }
+                            val id = VisitRepository.plan(place.id, day.date, hour)
                             addPlan(VisitPlan(place, day, hour, id))
                             // 계획만 잡고 지도로. 갈 때 '방문 예정' 띠를 눌러 카드를 연다
                             screen = Screen.MAP

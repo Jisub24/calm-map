@@ -4,14 +4,18 @@ import com.calmmap.ui.component.CalmIcons
 
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.TextStyle
 import java.util.Locale
+
+// '오늘' 은 서울 기준. 폰 시간대가 다르면(에뮬레이터는 UTC) 아침에 어제 날짜가 오늘로 잡힌다
+private val SEOUL: ZoneId = ZoneId.of("Asia/Seoul")
 
 /** 방문 시간 선택에서 고르는 날짜 칩 하나. "오늘" · "내일" · "토" · "일" */
 data class VisitDay(val label: String, val date: LocalDate)
 
 /** 오늘 · 내일 · 다가오는 토 · 일. 토 · 일이 오늘이나 내일과 겹치면 그다음 주로 */
-fun upcomingVisitDays(today: LocalDate = LocalDate.now()): List<VisitDay> {
+fun upcomingVisitDays(today: LocalDate = LocalDate.now(SEOUL)): List<VisitDay> {
     val tomorrow = today.plusDays(1)
     fun nextAfterTomorrow(day: DayOfWeek): LocalDate {
         var date = tomorrow.plusDays(1)
@@ -24,6 +28,21 @@ fun upcomingVisitDays(today: LocalDate = LocalDate.now()): List<VisitDay> {
         VisitDay("토", nextAfterTomorrow(DayOfWeek.SATURDAY)),
         VisitDay("일", nextAfterTomorrow(DayOfWeek.SUNDAY)),
     )
+}
+
+/**
+ * DB 에서 읽은 날짜를 날짜 칩과 같은 이름으로. 오늘 · 내일 · 어제, 일주일 안이면 "토", 그 밖은 "11/8"
+ */
+fun visitDayOf(date: LocalDate, today: LocalDate = LocalDate.now(SEOUL)): VisitDay {
+    val label = when {
+        date == today -> "오늘"
+        date == today.plusDays(1) -> "내일"
+        date == today.minusDays(1) -> "어제"
+        date.isAfter(today) && date.isBefore(today.plusDays(7)) ->
+            date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.KOREAN)
+        else -> "${date.monthValue}/${date.dayOfMonth}"
+    }
+    return VisitDay(label, date)
 }
 
 /** 정해 둔 방문. 지도 위 '방문 예정' 띠와 미리 보는 카드 · 현장 모드 · 방문 후 기록이 같이 쓴다 */
