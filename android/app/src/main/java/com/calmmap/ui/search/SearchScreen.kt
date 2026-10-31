@@ -1,5 +1,7 @@
 package com.calmmap.ui.search
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import com.calmmap.ui.theme.BgSubtle
 import com.calmmap.ui.theme.BorderStrong
@@ -113,7 +115,8 @@ fun SearchScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             SearchField(query = query, onQueryChange = onQueryChange, onBack = onBack)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 지도 칩 줄과 같다. 글자 크기를 키운 폰에서는 옆으로 넘긴다
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(label = "무던한 시간 있는 곳", selected = onlyCalm, onClick = { onlyCalm = !onlyCalm })
                 FilterChip(label = "가까운 순", selected = nearestFirst, onClick = { nearestFirst = !nearestFirst })
                 FilterChip(label = "영업 중", selected = onlyOpen, onClick = { onlyOpen = !onlyOpen })

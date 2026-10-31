@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.calmmap.ui.theme.BgSubtle
 import com.calmmap.ui.theme.BgSunken
 import com.calmmap.ui.theme.BgSurface
@@ -98,10 +101,13 @@ fun CalmButton(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (leadingIcon != null) CalmIcon(leadingIcon, size = 20.dp, tint = fg)
-        Text(
+        // 버튼 높이가 정해져 있어서 두 줄이 되면 잘린다. 폰 글자 크기를 키워 칸이 모자라면 한 줄 안에서 글자를 줄인다
+        val style = if (size == ButtonSize.L) MaterialTheme.typography.titleSmall else MaterialTheme.typography.labelLarge
+        BasicText(
             text = text,
-            style = if (size == ButtonSize.L) MaterialTheme.typography.titleSmall else MaterialTheme.typography.labelLarge,
-            color = fg,
+            style = style.copy(color = fg),
+            maxLines = 1,
+            autoSize = TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = style.fontSize),
         )
     }
 }

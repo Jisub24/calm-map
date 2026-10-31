@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -51,6 +52,9 @@ import com.calmmap.ui.theme.TextPrimary
 import com.calmmap.ui.theme.TextSecondary
 import com.calmmap.ui.theme.TextTertiary
 import com.calmmap.ui.theme.caption
+
+/** 사업장 웹 (business-web, Vercel) */
+private const val BUSINESS_WEB_URL = "https://calm-map-business-web.vercel.app"
 
 // 미리보기용
 private val sampleSensitivities = linkedMapOf(
@@ -141,8 +145,9 @@ fun MyPageScreen(
                     MenuRow(CalmIcons.Pin, "내가 측정한 장소", trailing = measuredCount?.let { "${it}곳" }, onClick = onMeasuredClick)
                 }
                 MenuRow(CalmIcons.Lock, "데이터·개인정보 안내", onClick = onDataInfoClick)
-                // TODO: 사업장 웹 주소가 정해지면 브라우저로 연다
-                MenuRow(CalmIcons.Store, "사업장이세요? 무던한 시간 등록", divider = !isGuest, onClick = {})
+                // 사업장 웹을 브라우저로 연다. 로그인 없이 가게를 찾아 영업시간 · 무던한 시간을 등록한다
+                val uriHandler = LocalUriHandler.current
+                MenuRow(CalmIcons.Store, "사업장 등록", divider = !isGuest, onClick = { uriHandler.openUri(BUSINESS_WEB_URL) })
                 if (!isGuest) {
                     MenuRow(CalmIcons.User, "계정 관리 (로그아웃 · 회원 탈퇴)", divider = false, onClick = onAccountClick)
                 }
