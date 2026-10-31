@@ -1,6 +1,7 @@
 package com.calmmap.ui.visit
 
 import android.util.Log
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -96,7 +97,7 @@ fun VisitTimeScreen(
                 CalmIcon(CalmIcons.Store, size = 16.dp, tint = TextSecondary)
                 Text(text = place.name, style = MaterialTheme.typography.labelLarge, color = TextSecondary)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 days.forEach {
                     FilterChip(label = dayChipLabel(it), selected = it == day, onClick = { day = it })
                 }

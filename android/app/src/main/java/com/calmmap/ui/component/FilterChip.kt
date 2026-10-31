@@ -58,11 +58,14 @@ fun FilterChip(
         horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // 폰 글자 크기를 키우면 칩 줄이 좁아진다. 글자가 두 줄로 꺾이지 않게 한 줄로 두고, 칩 줄 쪽에서 옆으로 넘긴다
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
             color = fg,
+            maxLines = 1,
+            softWrap = false,
         )
         if (trailingIcon != null) CalmIcon(trailingIcon, size = 16.dp, tint = fg)
     }

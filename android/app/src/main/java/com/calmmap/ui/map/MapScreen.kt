@@ -8,11 +8,15 @@ import com.calmmap.ui.component.CalmIcon
 import com.calmmap.ui.component.CalmIcons
 import android.os.Bundle
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -193,7 +197,8 @@ fun MapScreen(
             ) {
                 SearchBar(onClick = onSearchClick)
                 if (selectedPlace == null) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // 글자 크기를 키운 폰에서는 칩 셋이 한 줄에 안 들어간다. 옆으로 넘겨 본다
+                    Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
                             label = "지금",
                             selected = slot == null,
@@ -498,14 +503,15 @@ internal fun SheetHandle(modifier: Modifier = Modifier) {
     )
 }
 
-/** 지도 범례. 색이 아니라 진하기 · 테두리로 읽는 법을 알려준다 */
+/** 지도 범례. 색이 아니라 진하기 · 테두리로 읽는 법을 알려준다. 글자 크기를 키운 폰에서 폭이 모자라면 다음 줄로 */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LevelLegend(modifier: Modifier = Modifier) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    FlowRow(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SensoryLevel.entries.forEach { level ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 LevelGlyph(level, style = GlyphStyle.Dot, size = 10.dp)
-                Text(text = level.label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                Text(text = level.label, style = MaterialTheme.typography.labelSmall, color = TextSecondary, maxLines = 1, softWrap = false)
             }
         }
     }
