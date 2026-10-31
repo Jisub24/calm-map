@@ -1,7 +1,7 @@
 "use strict";
 // 무던한 지도 · 사업장 웹
 // 로그인 없이 Supabase anon key 로 붙는다 (docs/03 8번). 쓰기는 business_calm_hours 정책(012)과
-// add_business_place · set_place_hours 함수(029)로만 한다.
+// add_business_place · set_place_hours 함수(029), remove_business_place 함수(030)로만 한다.
 
 const cfg = window.CALM_CONFIG || {};
 const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
@@ -11,7 +11,8 @@ const ACTIONS = [
   { key: "light_down", label: "조명 낮추기", short: "조명 낮춤" },
   { key: "announcement_min", label: "안내방송 줄이기", short: "방송 최소" },
 ];
-const PLACE_COLUMNS = "id,name,category,address,lat,lng,kakao_id";
+const PLACE_COLUMNS = "id,name,category,address,lat,lng,kakao_id,source";
+const BUSINESS_SOURCE = "사업장등록"; // places.source (029). 이 웹으로 들어온 가게만 지도에서 지울 수 있다
 const STORE_KEY = "calm-business-place"; // 마지막으로 연 가게. 다시 열면 바로 그 가게 화면
 const MY_KEY = "calm-business-my-places"; // 이 브라우저에서 연 가게들 (최근 순). 가게가 여러 개인 사장님용
 
@@ -287,6 +288,7 @@ async function openPlace(place) {
   }
   rememberPlace(place.id);
   $("current-name").textContent = place.name;
+  $("remove-card").hidden = place.source !== BUSINESS_SOURCE;
   show("manage");
   resetCalmForm();
   await Promise.all([loadHours(), loadCalm()]);
@@ -369,6 +371,30 @@ function renderMyPlaces() {
     ),
   );
 }
+
+// ── 가게 삭제 ────────────────────────────────────────
+// 이 웹으로 등록한 가게만 버튼이 보인다. 지우면 앱 지도에서도 사라진다 (030).
+// 측정 · 방문 기록이 생긴 가게는 함수가 남겨 두고 false 를 돌려준다
+
+$("remove-place").addEventListener("click", async () => {
+  const p = state.place;
+  const ok = await confirmDialog(`${p.name} 삭제할까요?`, "사용자 앱 지도에서 사라지고, 등록한 영업시간 · 무던한 시간도 같이 지워져요.", "삭제");
+  if (!ok) return;
+  const { data: removed, error } = await db.rpc("remove_business_place", { p_place_id: p.id });
+  if (error) {
+    console.warn("가게 삭제 실패", error);
+    toast("삭제하지 못했어요. 잠시 뒤 다시 시도해 주세요");
+    return;
+  }
+  if (!removed) {
+    toast("측정 · 방문 기록이 있는 가게라 지도에서 지울 수 없어요");
+    return;
+  }
+  state.places = state.places.filter((x) => x.id !== p.id);
+  saveMyPlaceIds(myPlaceIds().filter((x) => x !== p.id));
+  goHome();
+  toast("가게를 삭제했어요");
+});
 
 // ── 영업시간 ─────────────────────────────────────────
 
