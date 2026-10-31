@@ -48,7 +48,7 @@ fun AccountScreen(
     onWithdraw: () -> Unit,
     modifier: Modifier = Modifier,
     joinedAt: String = "2026.10.24",
-    // TODO: 개수는 방문 · 측정을 연결하면 Supabase 에서 읽어온다
+    // 개수는 부르는 쪽이 DB 에서 읽어 넘긴다. 기본값은 미리보기용
     visitCount: Int = 6,
     measuredCount: Int = 3,
     childCount: Int = 1,
@@ -106,7 +106,8 @@ fun AccountScreen(
     if (confirmWithdraw) {
         ConfirmDialog(
             title = "정말 탈퇴할까요?",
-            body = "방문 기록 ${visitCount}건과 우리 아이 설정이 모두 지워지고, 되돌릴 수 없어요.",
+            body = "방문 기록 ${visitCount}건과 우리 아이 설정이 모두 지워지고, 되돌릴 수 없어요. " +
+                "직접 잰 측정은 누구 것인지 알 수 없게 남아 장소 점수에 계속 쓰여요.",
             confirmText = "탈퇴하기",
             onConfirm = {
                 confirmWithdraw = false

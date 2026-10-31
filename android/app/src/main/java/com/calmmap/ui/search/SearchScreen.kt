@@ -32,7 +32,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -81,12 +80,16 @@ fun SearchScreen(
     onMeasureClick: (PlaceUi) -> Unit = {},
     query: String = "",
     onQueryChange: (String) -> Unit = {},
+    /** 장소별 측정 요청 수 (measurement_requests). 로그인 전이면 비어 있다 */
+    requestCounts: Map<Long, Int> = emptyMap(),
+    /** 내가 측정을 요청한 장소. 한 사람이 한 번만 요청할 수 있다 */
+    requested: Set<Long> = emptySet(),
+    /** '측정 요청' · '요청함'(누르면 취소). 로그인 확인 · 저장은 부르는 쪽에서 */
+    onRequestClick: (PlaceUi) -> Unit = {},
 ) {
     var onlyCalm by remember { mutableStateOf(true) }
     var nearestFirst by remember { mutableStateOf(false) }
     var onlyOpen by remember { mutableStateOf(false) }
-    // 측정을 요청한 장소. 한 사람이 한 번만 누를 수 있다
-    val requested = remember { mutableStateListOf<Long>() }
 
     val results = remember(query, nearestFirst, onlyCalm, onlyOpen, places) {
         places
@@ -144,11 +147,11 @@ fun SearchScreen(
                     trailing = if (place.level == SensoryLevel.NO_DATA) {
                         {
                             val done = place.id in requested
+                            // 요청이 있으면 수를 붙인다. "측정 요청 3" · "요청함 3". 요청함을 다시 누르면 취소된다
+                            val count = requestCounts[place.id]?.takeIf { it > 0 }?.let { " $it" }.orEmpty()
                             SmallOutlineButton(
-                                // TODO: measurement_requests 를 연결하면 요청 수를 붙인다
-                                text = if (done) "요청함" else "측정 요청",
-                                onClick = { requested += place.id },
-                                enabled = !done,
+                                text = (if (done) "요청함" else "측정 요청") + count,
+                                onClick = { onRequestClick(place) },
                                 leadingIcon = if (done) CalmIcons.Check else CalmIcons.Plus,
                             )
                         }

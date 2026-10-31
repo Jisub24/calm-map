@@ -21,6 +21,7 @@ import com.calmmap.ui.theme.LevelNoData
 import com.calmmap.ui.theme.LevelOutline
 import com.calmmap.ui.theme.SensoryLevel
 import com.calmmap.ui.theme.Shadows
+import com.calmmap.ui.theme.StatusCaution
 import com.calmmap.ui.theme.TextPrimary
 import com.calmmap.ui.theme.TextTertiary
 
@@ -31,6 +32,7 @@ import com.calmmap.ui.theme.TextTertiary
  *   후보       이름 뒤에 " · 후보", 점은 점선 링
  *   정보 부족   흰 바탕 + 회색 테두리 · 이름 회색 · " · 정보 부족"
  *   선택       진한 바탕 · 이름 13 흰색 · 조금 더 크게
+ *   주의       이름 뒤에 '주의' 꼬리표 (우리 아이 맞춤에서 '매우' 로 고른 자극이 관측됐을 때)
  *
  * 네이버 지도 마커는 Compose 로 그릴 수 없고 비트맵을 받는다. 그래서 여기서 직접 그린다.
  * 점 모양은 component/LevelGlyph(Dot) 와 같은 규칙이다.
@@ -46,6 +48,8 @@ fun markerBitmap(
     selected: Boolean = false,
     // 앱 글꼴(Noto Sans KR). 못 읽으면 기본 굵은 글꼴
     typeface: Typeface = Typeface.DEFAULT_BOLD,
+    // 우리 아이 맞춤에서 '매우' 로 고른 자극이 관측됐으면 이름 뒤에 '주의' 를 붙인다. 단계 점은 그대로
+    caution: Boolean = false,
 ): MarkerImage = with(density) {
     // 상호 앞부분만 쓴다. "스타벅스 홍대역8번출구점" 처럼 길면 알약이 옆 마커를 덮는다.
     // 단계는 글자가 아니라 점 모양으로 읽는다 (하단 범례). 전체 이름은 카드 · 상세에 나온다
@@ -68,7 +72,15 @@ fun markerBitmap(
     val padV = (if (selected) 8 else 6).dp.toPx()
     val ring = 1.5.dp.toPx()
     val textH = textPaint.fontMetrics.let { it.descent - it.ascent }
-    val pillW = padL + dot + gap + textPaint.measureText(label) + padR
+    val tagPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.typeface = typeface
+        fontVariationSettings = "'wght' 700"
+        textSize = 10.dp.toPx()
+        color = BgSurface.toArgb()
+    }
+    val tagPadH = 5.dp.toPx()
+    val tagW = if (caution) gap + tagPadH * 2 + tagPaint.measureText(CAUTION) else 0f
+    val pillW = padL + dot + gap + textPaint.measureText(label) + tagW + padR
     val pillH = padV * 2 + maxOf(dot, textH)
 
     // 그림자가 잘리지 않게 사방에 여유를 둔다
@@ -103,8 +115,20 @@ fun markerBitmap(
     val baseline = cy - (textPaint.fontMetrics.ascent + textPaint.fontMetrics.descent) / 2
     canvas.drawText(label, cx + dot / 2 + gap, baseline, textPaint)
 
+    // '주의' 꼬리표. 이름 오른쪽, 주의 색 바탕에 흰 글자
+    if (caution) {
+        val left = cx + dot / 2 + gap + textPaint.measureText(label) + gap
+        val tagH = 16.dp.toPx()
+        val tag = RectF(left, cy - tagH / 2, left + tagW - gap, cy + tagH / 2)
+        canvas.drawRoundRect(tag, 4.dp.toPx(), 4.dp.toPx(), fill(StatusCaution))
+        val tagBase = cy - (tagPaint.fontMetrics.ascent + tagPaint.fontMetrics.descent) / 2
+        canvas.drawText(CAUTION, tag.left + tagPadH, tagBase, tagPaint)
+    }
+
     MarkerImage(bitmap, cx / bitmap.width, cy / bitmap.height)
 }
+
+private const val CAUTION = "주의"
 
 private fun drawLevelDot(canvas: Canvas, level: SensoryLevel, cx: Float, cy: Float, dot: Float, ring: Float) {
     when (level) {

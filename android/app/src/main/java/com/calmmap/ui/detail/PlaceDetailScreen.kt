@@ -112,18 +112,19 @@ fun PlaceDetailScreen(
     onMeasureClick: () -> Unit,
     onVisitClick: () -> Unit,
     modifier: Modifier = Modifier,
-    /** 우리 아이 맞춤은 로그인해야 쓸 수 있다. false 면 누를 때 onLoginNeeded */
-    canPersonalize: Boolean = true,
-    onLoginNeeded: () -> Unit = {},
+    /**
+     * '모두 기준 / 우리 아이 맞춤' 을 눌렀을 때. 지도 칩과 같은 상태라 부르는 쪽이 들고 있다.
+     * 맞춤이 켜져 있으면 [place] 는 이미 맞춤 값으로 바꾼 것이다 (place.personal)
+     */
+    onPersonalizeChange: (Boolean) -> Unit = {},
     /** 점수 · 소리 · 빛 · 사업장 탭 값을 못 읽었는지. 그러면 다시 시도 버튼을 띄운다 */
     detailFailed: Boolean = false,
     onRetry: () -> Unit = {},
+    /** 우리 아이 맞춤을 켰는지. 고른 자극이 없어 place 가 그대로여도 세그먼트는 켜진 쪽으로 */
+    personalized: Boolean = place.personal,
 ) {
-    // 0 모두 기준, 1 우리 아이 맞춤
-    var basis by remember { mutableIntStateOf(0) }
     var tab by remember { mutableStateOf(DetailTab.HOURLY) }
     var selectedHour by remember { mutableStateOf<Int?>(null) }
-    val personalized = basis == 1
 
     Column(
         modifier = modifier
@@ -150,17 +151,17 @@ fun PlaceDetailScreen(
                     color = TextTertiary,
                     modifier = Modifier.weight(1f),
                 )
-                LevelBadge(level = place.level, prefix = if (personalized) "우리 아이 기준 ·" else null)
+                LevelBadge(level = place.level, prefix = if (place.personal) "우리 아이 기준 ·" else null)
             }
 
             FullSegmented(
                 options = listOf("모두 기준", "우리 아이 맞춤"),
-                selectedIndex = basis,
-                onSelect = { if (it == 1 && !canPersonalize) onLoginNeeded() else basis = it },
+                selectedIndex = if (personalized) 1 else 0,
+                onSelect = { onPersonalizeChange(it == 1) },
             )
 
             // '매우'로 고른 자극이 관측된 곳이면 맞춤 기준에서 먼저 알린다
-            detail?.warning?.takeIf { personalized }?.let { CautionBanner(text = it) }
+            place.caution?.let { CautionBanner(text = it) }
 
             RecommendationCard(recommendation = place.recommendation, basis = place.recommendationBasis)
 
@@ -241,11 +242,11 @@ private fun CardTitle(title: String, trailing: String? = null, info: String? = n
     }
 }
 
-/** 우리 아이 맞춤에서 '매우' 자극이 관측됐을 때 (주의 색 상자) */
+/** 우리 아이 맞춤에서 '매우' 자극이 관측됐을 때 (주의 색 상자). 장소 카드 · 정보 부족 화면도 쓴다 */
 @Composable
-private fun CautionBanner(text: String) {
+internal fun CautionBanner(text: String, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(Radius.banner)
             .background(StatusCautionSoft)

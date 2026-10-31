@@ -1,10 +1,14 @@
 package com.calmmap.data
 
 import android.util.Log
+import com.calmmap.ui.model.ChildFit
 import com.calmmap.ui.model.HourBar
 import com.calmmap.ui.model.OtherRecord
 import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.TimeSlot
+import com.calmmap.ui.model.josa
+import com.calmmap.ui.onboarding.Sensitivity
+import com.calmmap.ui.onboarding.SensoryFactor
 import com.calmmap.ui.theme.SensoryLevel
 import com.naver.maps.geometry.LatLng
 import io.github.jan.supabase.postgrest.from
@@ -79,19 +83,36 @@ object PlaceRepository {
         val area_crowd_level: Int? = null,
         /** slot_forecast 만. area_crowd_level 을 낸 날 수 */
         val area_days: Int = 0,
+        /** 하위 점수 0~100. 우리 아이 맞춤이 고른 자극별로 본다. 밝기는 장소 값이라 모든 칸이 같다 */
+        val score_crowd: Float? = null,
+        val score_loudness: Float? = null,
+        val score_light: Float? = null,
+    )
+
+    /** place_sound_summary 한 줄. heard_count 는 028 부터 있다 */
+    @Serializable
+    private data class SoundRow(val place_id: Long, val sound_type: String, val ratio: Double = 0.0, val heard_count: Int? = null)
+
+    /** place_measure_summary 한 줄. *_heard_count 는 028 부터 있다 */
+    @Serializable
+    private data class MeasureRow(
+        val place_id: Long,
+        val sudden_per_hour: Double? = null,
+        val announce_per_hour: Double? = null,
+        val sudden_heard_count: Int? = null,
+        val announce_heard_count: Int? = null,
     )
 
     /**
-     * 지도가 쓰는 장소 목록. 한 번 읽어 두고, 시간을 고를 때마다 DB 를 다시 읽지 않고 여기서 만든다.
-     * 같은 때를 다시 고르면 만들어 둔 목록을 그대로 준다. 목록이 같아야 지도가 마커를 다시 그리지 않는다
+     * 지도가 쓰는 장소 목록. 한 번 읽어 두고, 시간을 고르거나 우리 아이 설정이 바뀔 때마다 DB 를 다시 읽지 않고 여기서 만든다.
+     * 같은 때 · 같은 설정이면 만들어 둔 목록을 그대로 준다. 목록이 같아야 지도가 마커를 다시 그리지 않는다
      */
-    class MapPlaces internal constructor(private val make: (TimeSlot?) -> List<PlaceUi>) {
-        /** 지금 기준. 검색 · 측정 장소 고르기도 이것을 쓴다 */
-        val now: List<PlaceUi> = make(null)
-        private val made = mutableMapOf<TimeSlot, List<PlaceUi>>()
+    class MapPlaces internal constructor(private val make: (TimeSlot?, Map<SensoryFactor, Sensitivity>) -> List<PlaceUi>) {
+        private val made = mutableMapOf<Pair<TimeSlot?, Map<SensoryFactor, Sensitivity>>, List<PlaceUi>>()
 
-        /** 고른 때 기준. null 이면 지금 */
-        fun at(slot: TimeSlot?): List<PlaceUi> = if (slot == null) now else made.getOrPut(slot) { make(slot) }
+        /** 고른 때 기준. null 이면 지금. [child] 는 우리 아이 설정. 주면 장소마다 맞춤 값(PlaceUi.fit)을 같이 만든다 */
+        fun at(slot: TimeSlot?, child: Map<SensoryFactor, Sensitivity> = emptyMap()): List<PlaceUi> =
+            made.getOrPut(slot to child) { make(slot, child) }
     }
 
     /** 모든 장소를 지도용으로 읽는다. 로그인 토큰이 만료됐으면 새로 받고 읽는다 */
@@ -116,6 +137,7 @@ object PlaceRepository {
                     Columns.list(
                         "place_id", "date", "hour", "status", "level", "is_estimated",
                         "total_score", "main_factor", "measurement_count", "area_crowd_level",
+                        "score_crowd", "score_loudness", "score_light",
                     ),
                 ) { filter { eq("date", today) } }
                 .decodeList<ForecastRow>()
@@ -128,24 +150,54 @@ object PlaceRepository {
                         Columns.list(
                             "place_id", "day_group", "hour", "status", "level", "is_estimated",
                             "total_score", "main_factor", "measurement_count", "area_crowd_level", "area_days",
+                            "score_crowd", "score_loudness", "score_light",
                         ),
                     )
                     .decodeList<ForecastRow>()
             }.onFailure { Log.w("CalmMap", "시간 선택 값 읽기 실패: ${it.brief()}") }.getOrElse { emptyList() }
+        }
+        // 우리 아이 맞춤에 쓰는 장소 고유값. 못 읽어도 지도는 뜨고, 맞춤은 혼잡 · 소리 크기 · 밝기로만 본다
+        val sounds = async {
+            runCatching {
+                supabase.from("place_sound_summary")
+                    .select(Columns.list("place_id", "sound_type", "ratio", "heard_count"))
+                    .decodeList<SoundRow>()
+            }.recoverCatching {
+                // 028 전이면 heard_count 가 없다. 중앙값 비율로 대신 본다
+                supabase.from("place_sound_summary")
+                    .select(Columns.list("place_id", "sound_type", "ratio"))
+                    .decodeList<SoundRow>()
+            }.onFailure { Log.w("CalmMap", "소리 요약 읽기 실패: ${it.brief()}") }.getOrElse { emptyList() }
+        }
+        val measures = async {
+            runCatching {
+                supabase.from("place_measure_summary")
+                    .select(Columns.list("place_id", "sudden_per_hour", "announce_per_hour", "sudden_heard_count", "announce_heard_count"))
+                    .decodeList<MeasureRow>()
+            }.recoverCatching {
+                // 028 전이면 *_heard_count 가 없다. 중앙값으로 대신 본다
+                supabase.from("place_measure_summary")
+                    .select(Columns.list("place_id", "sudden_per_hour", "announce_per_hour"))
+                    .decodeList<MeasureRow>()
+            }.onFailure { Log.w("CalmMap", "측정 요약 읽기 실패: ${it.brief()}") }.getOrElse { emptyList() }
         }
         val placeRows = places.await()
         val hoursByPlace = hours.await().groupBy { it.place_id }
         val todayByPlace = forecast.await().groupBy { it.place_id }
         // 평일/주말 → 장소 → 그 묶음 줄들
         val slotsByGroup = slots.await().groupBy { it.day_group }.mapValues { (_, rows) -> rows.groupBy { it.place_id } }
+        val factsByPlace = factsOf(sounds.await(), measures.await())
 
-        MapPlaces { slot ->
+        MapPlaces { slot, child ->
             val byPlace = if (slot == null) todayByPlace else slotsByGroup[slot.dayGroup].orEmpty()
             // 지금 보는 묶음의 반대쪽. 이쪽에 측정이 없으면 "주말 기록 보기" 로 안내한다
             val otherWeekend = !(slot?.weekend ?: isWeekend(now.toLocalDate()))
             val otherByPlace = slotsByGroup[if (otherWeekend) "weekend" else "weekday"].orEmpty()
             placeRows.map { row ->
-                placeUi(row, byPlace[row.id].orEmpty(), hoursByPlace[row.id], now, slot, otherByPlace[row.id].orEmpty(), otherWeekend)
+                placeUi(
+                    row, byPlace[row.id].orEmpty(), hoursByPlace[row.id], now, slot, otherByPlace[row.id].orEmpty(), otherWeekend,
+                    child, factsByPlace[row.id],
+                )
             }
         }
     }
@@ -166,6 +218,9 @@ object PlaceRepository {
         /** 반대쪽 묶음(평일 ↔ 주말)의 slot_forecast 줄 */
         other: List<ForecastRow>,
         otherWeekend: Boolean,
+        /** 우리 아이 설정. 민감 · 매우로 고른 자극이 있으면 맞춤 값(fit)을 같이 만든다 */
+        child: Map<SensoryFactor, Sensitivity>,
+        facts: PlaceFacts?,
     ): PlaceUi {
         val byHour = rows.associateBy { it.hour }
         val known = rows.any { it.status != "insufficient" }
@@ -184,24 +239,20 @@ object PlaceRepository {
         val measured = rows.sumOf { it.measurement_count }
         // 영업 중인지도 그때 기준으로. 고른 때는 그 묶음의 가장 가까운 날 그 시각 30분으로 본다 (화면에 날짜는 안 나온다)
         val openAt = if (slot == null) now.toLocalDateTime() else nextDayOf(now.toLocalDate(), slot.weekend).atTime(slot.hour, 30)
-        return PlaceUi(
-            id = row.id,
-            name = row.name,
-            category = row.category,
-            position = LatLng(row.lat, row.lng),
-            level = level,
-            description = describe(
-                level = level,
+        val describeAs = { lv: SensoryLevel ->
+            describe(
+                level = lv,
                 measured = measured,
                 estimated = pickedRow?.is_estimated == true,
                 at = slot?.let { "${it.hour}시" } ?: "지금",
                 known = known,
                 other = otherRecord,
-            ),
-            walkMinutes = null,
-            openNow = hours?.let { isOpen(it, openAt) },
+            )
+        }
+        // 무던함에서 뺄 시각을 받아 결론 문구를 만든다. 맞춤이 아니면 뺄 시각이 없다
+        val recommendWithout = { blocked: Set<Int> ->
             // 이쪽 묶음엔 측정이 없고 반대쪽에만 있으면 그걸 먼저 알린다 (지도 카드 · 정보 부족 화면)
-            recommendation = otherRecord?.let { "${it.emptyGroupLabel}에 잰 기록은 아직 없어요" } ?: recommend(
+            otherRecord?.let { "${it.emptyGroupLabel}에 잰 기록은 아직 없어요" } ?: recommend(
                 byHour = byHour,
                 nowHour = if (slot == null) now.hour else null,
                 dayWord = when {
@@ -209,16 +260,30 @@ object PlaceRepository {
                     slot.weekend -> "주말에는"
                     else -> "평일에는"
                 },
-            ),
+                blocked = blocked,
+            )
+        }
+        val bars = if (rows.isEmpty()) emptyList() else CHART_HOURS.map { bar(it, byHour[it]) }
+        return PlaceUi(
+            id = row.id,
+            name = row.name,
+            category = row.category,
+            position = LatLng(row.lat, row.lng),
+            level = level,
+            description = describeAs(level),
+            walkMinutes = null,
+            openNow = hours?.let { isOpen(it, openAt) },
+            recommendation = recommendWithout(emptySet()),
             recommendationBasis = otherRecord?.let { "${it.slot.groupLabel}에는 ${it.count}번 쟀어요 · 상세 보기에서 ${it.slot.groupLabel} 기록을 볼 수 있어요" }
                 ?: basis(rows, measured, known),
-            hours = if (rows.isEmpty()) emptyList() else CHART_HOURS.map { bar(it, byHour[it]) },
+            hours = bars,
             areaCrowd = if (rows.isEmpty()) emptyList() else CHART_HOURS.map { byHour[it]?.area_crowd_level },
             measureCount = measured,
             slot = slot,
             areaDays = rows.maxOfOrNull { it.area_days } ?: 0,
             kakaoId = row.kakao_id,
             otherRecord = otherRecord,
+            fit = fitOf(child, byHour, rows, facts, pickedRow, level, bars, describeAs, recommendWithout),
         )
     }
 
@@ -300,12 +365,11 @@ object PlaceRepository {
      * 무던함은 실측으로 확정된 시각만 센다 (추정 시각은 '후보' 라 추천하지 않는다 — 답변서 질의 2).
      * [dayWord] 는 "오늘은" · "주말에는" · "평일에는". 오늘이 아닌 날은 [nowHour] 가 null 이라 지난 시각이 없다
      */
-    private fun recommend(byHour: Map<Int, ForecastRow>, nowHour: Int?, dayWord: String): String {
+    private fun recommend(byHour: Map<Int, ForecastRow>, nowHour: Int?, dayWord: String, blocked: Set<Int> = emptySet()): String {
         // 칸이 있어도 전부 정보 부족이면 안내할 게 없다. 아래로 내려가면 "아직 추정만 있어요" 로 잘못 나온다
         if (byHour.values.none { it.status != "insufficient" }) return "아직 측정이 부족해서 안내하기 어려워요"
-        val calm = CHART_HOURS.filter { h ->
-            byHour[h]?.let { it.status == "level" && it.level == "calm" && !it.is_estimated } == true
-        }.toSet()
+        // [blocked] 는 우리 아이 맞춤에서 무던함으로 안내하지 않는 시각
+        val calm = calmHours(byHour) - blocked
         // 문 닫기 전 마지막 시각까지 무던하면 "N시 이후", 아니면 실제로 무던한 구간만 말한다
         val lastHour = byHour.keys.filter { it in CHART_HOURS }.maxOrNull()
         val next = calm.filter { it >= (nowHour ?: 0) }.minOrNull()
@@ -333,6 +397,138 @@ object PlaceRepository {
         rows.isEmpty() || !known -> "이 장소의 소리 · 빛 정보가 아직 없어요"
         measured == 0 -> "주변 지역 혼잡으로 추정했어요"
         else -> "직접 측정한 기록 ${measured}건을 바탕으로 예측했어요"
+    }
+
+    /** 실측으로 확정된 무던한 시각. 추정은 '후보' 라 넣지 않는다 (답변서 질의 2) */
+    private fun calmHours(byHour: Map<Int, ForecastRow>): Set<Int> = CHART_HOURS.filter { h ->
+        byHour[h]?.let { it.status == "level" && it.level == "calm" && !it.is_estimated } == true
+    }.toSet()
+
+    /** {14, 15, 17} → "14~15시, 17시" */
+    private fun spans(hours: Set<Int>): String {
+        val sorted = hours.sorted()
+        val parts = mutableListOf<String>()
+        var start = sorted.first()
+        var prev = start
+        for (h in sorted.drop(1)) {
+            if (h != prev + 1) {
+                parts += span(start, prev)
+                start = h
+            }
+            prev = h
+        }
+        parts += span(start, prev)
+        return parts.joinToString(", ")
+    }
+
+    // ── 우리 아이 맞춤 ─────────────────────────────────────
+
+    /** 맞춤에서 장소 단위로 보는 값. 소리 종류 · 돌발 · 안내방송은 장소 고유값이다 (답변서2 질의1) */
+    private class PlaceFacts(
+        /** 한 번이라도 들린 소리 종류 (alarm · loud_voice · machine …) */
+        val heard: Set<String>,
+        /** 돌발 · 안내방송이 한 번이라도 있었는지 */
+        val sudden: Boolean,
+    )
+
+    /** 보통 · 부담 높음 기준선. bar() 의 40 · 70 과 같다 */
+    private const val NOTICE = 40f
+    private const val HIGH = 70f
+
+    /** 시각마다 달라지는 자극. 나머지는 장소 고유값이라 모든 시각이 같다 (답변서2 질의1) */
+    private val HOURLY = setOf(SensoryFactor.Crowd, SensoryFactor.SustainedLoud)
+
+    /**
+     * '매우' 는 한 번만 관측돼도 알린다. 요약 뷰의 대표값은 측정끼리 중앙값이라 측정 절반 이상에서 나와야 0 보다 커져서,
+     * 한 번이라도 나온 측정 수(*_heard_count, 028)로 본다. 028 전이면 중앙값으로 대신 본다
+     */
+    private fun factsOf(sounds: List<SoundRow>, measures: List<MeasureRow>): Map<Long, PlaceFacts> {
+        val heard = sounds.filter { (it.heard_count ?: if (it.ratio > 0) 1 else 0) > 0 }.groupBy({ it.place_id }, { it.sound_type })
+        val measureById = measures.associateBy { it.place_id }
+        return (sounds.map { it.place_id } + measureById.keys).toSet().associateWith { id ->
+            val m = measureById[id]
+            val sudden = (m?.sudden_heard_count ?: if ((m?.sudden_per_hour ?: 0.0) > 0) 1 else 0) > 0
+            val announce = (m?.announce_heard_count ?: if ((m?.announce_per_hour ?: 0.0) > 0) 1 else 0) > 0
+            PlaceFacts(heard = heard[id].orEmpty().toSet(), sudden = sudden || announce)
+        }
+    }
+
+    /**
+     * 고른 자극이 그 칸에서 얼마나 나왔나 (0~100). 모르면 null 이고, 모르는 것은 바꾸지 않는다.
+     *   사람 많음 · 계속되는 큰 소리   그 시각 혼잡 · 소리 크기 점수
+     *   밝은 조명                     장소 밝기 점수
+     *   소리 종류                     측정에서 한 번이라도 관측됐으면 100, 아니면 0. 측정이 없는 장소는 null
+     */
+    private fun signal(f: SensoryFactor, r: ForecastRow?, light: Float?, facts: PlaceFacts?): Float? = when (f) {
+        SensoryFactor.Crowd -> r?.score_crowd
+        SensoryFactor.SustainedLoud -> r?.score_loudness
+        SensoryFactor.BrightLight -> light
+        SensoryFactor.SuddenSound -> facts?.let { if (it.sudden) 100f else 0f }
+        SensoryFactor.Alarm -> facts?.let { if ("alarm" in it.heard) 100f else 0f }
+        SensoryFactor.LoudVoice -> facts?.let { if ("loud_voice" in it.heard) 100f else 0f }
+        SensoryFactor.Machine -> facts?.let { if ("machine" in it.heard) 100f else 0f }
+    }
+
+    /**
+     * 우리 아이 맞춤 값 (ChildFit 설명 참고). 민감 · 매우로 고른 자극이 없으면 null.
+     *   민감 · 매우   그 자극이 보통(40) 이상인 시각은 무던함에서 뺀다
+     *   매우         부담 높음(70) 이상이거나 소리 종류가 관측되면 '주의'
+     */
+    private fun fitOf(
+        child: Map<SensoryFactor, Sensitivity>,
+        byHour: Map<Int, ForecastRow>,
+        rows: List<ForecastRow>,
+        facts: PlaceFacts?,
+        /** 마커 · 목록이 보여주는 칸 */
+        pickedRow: ForecastRow?,
+        level: SensoryLevel,
+        bars: List<HourBar>,
+        describeAs: (SensoryLevel) -> String,
+        recommendWithout: (Set<Int>) -> String,
+    ): ChildFit? {
+        val chosen = child.filterValues { it != Sensitivity.Normal }
+        if (chosen.isEmpty()) return null
+        val light = rows.firstNotNullOfOrNull { it.score_light }
+        fun at(f: SensoryFactor, r: ForecastRow?) = signal(f, r, light, facts) ?: 0f
+
+        val very = chosen.filterValues { it == Sensitivity.Very }.keys
+        // 자극별로 보통 이상인 시각. 이 시각들은 무던함으로 안내하지 않는다
+        val notice = chosen.keys.associateWith { f -> CHART_HOURS.filter { at(f, byHour[it]) >= NOTICE }.toSet() }
+        val blocked = notice.values.flatten().toSet()
+
+        val blockedNow = chosen.keys.any { at(it, pickedRow) >= NOTICE }
+        val cautionNow = very.any { at(it, pickedRow) >= HIGH }
+        // 후보(추정)도 무던함 후보라서 같이 보통으로 올린다. 부담을 낮게 안내하지 않으려는 것
+        val fitLevel = if (blockedNow && (level == SensoryLevel.CALM || level == SensoryLevel.CANDIDATE)) SensoryLevel.MID else level
+        val fitBars = bars.map { if (it.level == SensoryLevel.CALM && it.hour in blocked) it.copy(level = SensoryLevel.MID) else it }
+
+        val removed = bars.filter { it.level == SensoryLevel.CALM && it.hour in blocked }.map { it.hour }.toSet()
+        val removedBy = chosen.keys.filter { f -> notice.getValue(f).any { it in removed } }
+        val warnings = very.mapNotNull { f ->
+            val name = "'매우'로 고른 ${f.label}${josa(f.label, "이", "가")}"
+            val highHours = CHART_HOURS.filter { at(f, byHour[it]) >= HIGH }.toSet()
+            when {
+                f !in HOURLY && at(f, null) >= HIGH ->
+                    if (f == SensoryFactor.BrightLight) "$name 이 장소에서 높게 나왔어요" else "$name 이 장소에서 관측됐어요"
+                highHours.isNotEmpty() -> "$name ${spans(highHours)}에 높아요"
+                else -> null
+            }
+        }
+        val reason = when {
+            removed.isNotEmpty() -> "우리 아이 설정의 ${removedBy.joinToString(" · ") { it.label }} 때문에 ${spans(removed)}를 무던함에서 뺐어요"
+            warnings.isNotEmpty() -> "단계는 그대로 두고, 고른 자극이 관측된 것만 따로 알려요"
+            rows.none { it.status != "insufficient" } && facts == null -> "아직 측정이 없어 우리 아이 기준으로 볼 수 없어요"
+            else -> "고른 자극이 이 장소에서 높게 나오지 않아 바뀐 시간이 없어요"
+        }
+        return ChildFit(
+            level = fitLevel,
+            description = (if (cautionNow) "주의 · " else "") + describeAs(fitLevel),
+            recommendation = recommendWithout(blocked),
+            hours = fitBars,
+            reason = reason,
+            warning = warnings.takeIf { it.isNotEmpty() }?.joinToString("\n"),
+            cautionNow = cautionNow,
+        )
     }
 
     // ── 영업시간 ──────────────────────────────────────────

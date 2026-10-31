@@ -3,6 +3,7 @@ package com.calmmap.data
 import com.calmmap.ui.model.HardFactor
 import com.calmmap.ui.model.VisitFeeling
 import com.calmmap.ui.model.VisitUi
+import com.calmmap.ui.onboarding.SensoryFactor
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
@@ -179,6 +180,29 @@ object VisitRepository {
                 visitedOn = at.toLocalDate(),
             )
         }
+    }
+
+    @Serializable
+    private data class HardRow(val hard_factors: List<String>? = null)
+
+    /**
+     * '힘들었어요' 로 기록한 방문을 우리 아이 설정의 자극별로 센다.
+     * 한 방문에서 안내방송과 갑작스러운 소리를 같이 골라도 갑작스러운 소리 1번이다
+     */
+    suspend fun hardCounts(): Map<SensoryFactor, Int> {
+        val rows = withFreshSession {
+            supabase.from("visits")
+                .select(Columns.list("hard_factors")) { filter { eq("result", "hard") } }
+                .decodeList<HardRow>()
+        }
+        return rows
+            .flatMap { row ->
+                row.hard_factors.orEmpty()
+                    .mapNotNull { v -> HardFactor.entries.find { it.dbValue == v }?.factor }
+                    .distinct()
+            }
+            .groupingBy { it }
+            .eachCount()
     }
 
     /** "2026-10-31T15:00+09:00". 폰 시간대와 상관없이 서울 시각으로 */

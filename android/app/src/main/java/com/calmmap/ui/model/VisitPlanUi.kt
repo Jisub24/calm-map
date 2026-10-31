@@ -1,6 +1,8 @@
 package com.calmmap.ui.model
 
 import com.calmmap.ui.component.CalmIcons
+import com.calmmap.ui.onboarding.Sensitivity
+import com.calmmap.ui.onboarding.SensoryFactor
 
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -93,14 +95,38 @@ val sampleQuietSpots = listOf(
 
 /**
  * 방문 후 기록에서 고르는 '무엇이 힘들었나요'. dbValue 는 visits.hard_factors 에 들어가는 값 (011 규칙과 같게).
- * '잘 모르겠어요' 는 DB 에 넣지 않고 비워 둔다
+ * '잘 모르겠어요' 는 DB 에 넣지 않고 비워 둔다.
+ * [factor] 는 우리 아이 설정의 자극. 같은 자극이 힘들었던 방문이 쌓이면 설정을 올릴지 묻는다
  */
-enum class HardFactor(val label: String, val dbValue: String?) {
-    ANNOUNCEMENT("안내방송", "announcement"),
-    SPEECH("말소리", "speech"),
-    MUSIC("음악", "music"),
-    MACHINE("기계음", "machine"),
-    SUDDEN("갑작스러운 소리", "sudden"),
-    CROWD("사람 많음", "crowd"),
-    UNKNOWN("잘 모르겠어요", null),
+enum class HardFactor(val label: String, val dbValue: String?, val factor: SensoryFactor?) {
+    ANNOUNCEMENT("안내방송", "announcement", SensoryFactor.SuddenSound),
+    SPEECH("말소리", "speech", SensoryFactor.SustainedLoud),
+    MUSIC("음악", "music", SensoryFactor.SustainedLoud),
+    MACHINE("기계음", "machine", SensoryFactor.Machine),
+    SUDDEN("갑작스러운 소리", "sudden", SensoryFactor.SuddenSound),
+    CROWD("사람 많음", "crowd", SensoryFactor.Crowd),
+    UNKNOWN("잘 모르겠어요", null, null),
+}
+
+/** 방문 기록으로 우리 아이 설정을 한 단계 올리자는 제안. [count] 는 그 자극이 힘들었던 방문 수 */
+data class RaiseSuggestion(val factor: SensoryFactor, val to: Sensitivity, val count: Int)
+
+/**
+ * 이번 기록에서 고른 자극([picked]) 가운데, 힘들었던 방문이 충분히 쌓인 것 하나를 한 단계 올리자고 한다.
+ *   보통 → 민감   2번
+ *   민감 → 매우   4번
+ * 한 번 힘들었다고 바로 올리지 않는다 (아이 컨디션 · 그날 상황일 수 있다). 보호자가 '올리기' 를 눌러야 바뀐다
+ */
+fun raiseSuggestion(
+    picked: List<HardFactor>,
+    counts: Map<SensoryFactor, Int>,
+    current: Map<SensoryFactor, Sensitivity>,
+): RaiseSuggestion? = picked.mapNotNull { it.factor }.distinct().firstNotNullOfOrNull { f ->
+    val (to, need) = when (current[f] ?: Sensitivity.Normal) {
+        Sensitivity.Normal -> Sensitivity.Sensitive to 2
+        Sensitivity.Sensitive -> Sensitivity.Very to 4
+        Sensitivity.Very -> return@firstNotNullOfOrNull null
+    }
+    val count = counts[f] ?: 0
+    if (count >= need) RaiseSuggestion(f, to, count) else null
 }

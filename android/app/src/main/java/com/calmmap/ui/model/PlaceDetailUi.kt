@@ -9,8 +9,6 @@ import com.calmmap.ui.theme.SensoryLevel
  * 지도에 장소 15곳을 띄울 때 소리 구성이나 점수 내역까지 들고 있을 이유가 없다.
  */
 data class PlaceDetailUi(
-    /** 보호자가 '매우 민감'으로 고른 자극이 관측됐을 때 띄우는 한 줄. 없으면 null */
-    val warning: String? = null,
     /** 지금 시각의 점수 내역. 오늘 점수가 한 칸도 없으면 null */
     val score: ScoreBreakdown?,
     val sounds: List<SoundRow> = emptyList(),
@@ -84,7 +82,6 @@ data class CalmHours(
 // ─────────────────────────────────────────────────────────────
 
 val sampleMartDetail = PlaceDetailUi(
-    warning = "'매우'로 고른 갑작스러운 소리(안내방송 추정)가 관측된 곳이에요.",
     score = ScoreBreakdown(
         hour = 12,
         total = 80,
@@ -156,7 +153,6 @@ val sampleLibraryDetail = PlaceDetailUi(
 )
 
 val sampleCafeDetail = PlaceDetailUi(
-    warning = "'매우'로 고른 갑작스러운 소리가 관측된 곳이에요.",
     score = ScoreBreakdown(
         hour = 15,
         total = 76,

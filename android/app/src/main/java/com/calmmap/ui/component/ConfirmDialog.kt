@@ -28,6 +28,8 @@ fun ConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
     dismissText: String = "취소",
+    /** 확인 버튼 모양. 지우는 일은 Danger, 설정을 올리는 것처럼 되돌릴 수 있는 일은 Primary */
+    confirmVariant: ButtonVariant = ButtonVariant.Danger,
 ) {
     // 기본 너비 대신 좌우 24 여백 (최종안 312/360)
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -47,7 +49,7 @@ fun ConfirmDialog(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 CalmButton(dismissText, onDismiss, Modifier.weight(1f), ButtonVariant.Secondary, ButtonSize.M)
-                CalmButton(confirmText, onConfirm, Modifier.weight(1f), ButtonVariant.Danger, ButtonSize.M)
+                CalmButton(confirmText, onConfirm, Modifier.weight(1f), confirmVariant, ButtonSize.M)
             }
         }
     }

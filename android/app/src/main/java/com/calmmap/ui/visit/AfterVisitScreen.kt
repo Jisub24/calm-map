@@ -147,7 +147,7 @@ fun AfterVisitScreen(
             ) {
                 CalmIcon(CalmIcons.Info, size = 16.dp, tint = TextTertiary)
                 Text(
-                    text = "고른 요인은 '우리 아이 맞춤'에 조금씩 반영돼요. 한 번에 크게 바뀌지 않아요.",
+                    text = "고른 요인은 '우리 아이 맞춤'에 조금씩 반영돼요. 같은 요인이 두 번 힘들었으면 우리 아이 설정을 올릴지 여쭤봐요.",
                     style = MaterialTheme.typography.caption,
                     color = TextSecondary,
                 )
