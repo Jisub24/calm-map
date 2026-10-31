@@ -44,7 +44,7 @@
       <div class="card my-places" id="my-places" hidden>
         <p class="field-label">내 가게</p>
         <div id="my-places-list"></div>
-        <p class="notice">이 브라우저에서 연 가게예요. 목록에서 빼도 등록한 시간은 지워지지 않아요.</p>
+        <p class="notice">이 브라우저에서 연 가게예요. 빼도 지도와 등록한 시간은 그대로예요.</p>
       </div>
 
       <div class="card">
@@ -158,6 +158,17 @@
             <div class="reg-list" id="reg-list"></div>
           </div>
         </aside>
+      </div>
+
+      <!-- 가게 삭제. 이 웹으로 등록한 가게만 보인다 (030) -->
+      <div class="card remove-card" id="remove-card" hidden>
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">가게 삭제</h2>
+            <p class="card-desc">사용자 앱 지도에서 이 가게를 지워요. 영업시간과 무던한 시간도 같이 지워져요.</p>
+          </div>
+          <button class="btn btn-secondary" id="remove-place" type="button">가게 삭제</button>
+        </div>
       </div>
     </section>
 
