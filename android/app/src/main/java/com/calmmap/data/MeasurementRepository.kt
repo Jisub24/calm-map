@@ -4,7 +4,9 @@ import android.os.Build
 import com.calmmap.ui.model.MeasureResult
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
+import java.time.OffsetDateTime
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import kotlinx.serialization.Serializable
 
 // 측정 결과(measurements · measurement_labels)를 쓴다. 자기 계정으로만 넣을 수 있다 (RLS)
@@ -102,4 +104,30 @@ object MeasurementRepository {
         if (labels.isNotEmpty()) withFreshSession { supabase.from("measurement_labels").insert(labels) }
         return id
     }
+
+    @Serializable
+    private data class MineRow(val place_id: Long, val measured_at: String)
+
+    /** 내가 측정한 장소 하나. 마지막 측정 시각은 서울 기준 */
+    data class Mine(val placeId: Long, val count: Int, val lastAt: ZonedDateTime)
+
+    /** 내가 측정한 장소들. 최근에 잰 곳부터. RLS 가 자기 측정만 돌려준다 */
+    suspend fun mine(): List<Mine> {
+        val rows = withFreshSession {
+            supabase.from("measurements")
+                .select(Columns.list("place_id", "measured_at"))
+                .decodeList<MineRow>()
+        }
+        return rows.groupBy { it.place_id }
+            .map { (placeId, same) ->
+                Mine(
+                    placeId = placeId,
+                    count = same.size,
+                    lastAt = same.maxOf { OffsetDateTime.parse(it.measured_at).atZoneSameInstant(SEOUL) },
+                )
+            }
+            .sortedByDescending { it.lastAt }
+    }
+
+    private val SEOUL: ZoneId = ZoneId.of("Asia/Seoul")
 }

@@ -2,6 +2,7 @@ package com.calmmap.ui.map
 
 import androidx.compose.ui.text.style.TextOverflow
 import com.calmmap.ui.component.ButtonSize
+import com.calmmap.ui.detail.CautionBanner
 import com.calmmap.ui.component.CalmIcon
 import com.calmmap.ui.component.CalmIcons
 import com.calmmap.ui.component.ChartLegend
@@ -102,7 +103,7 @@ fun PlaceSheet(
                 color = TextPrimary,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            LevelBadge(level = place.level)
+            LevelBadge(level = place.level, prefix = if (place.personal) "우리 아이 기준 ·" else null)
         }
 
         Text(
@@ -111,6 +112,9 @@ fun PlaceSheet(
             color = TextTertiary,
             modifier = Modifier.padding(top = 2.dp),
         )
+
+        // 우리 아이 맞춤에서 '매우' 로 고른 자극이 관측된 곳. 장소 상세와 같은 상자
+        place.caution?.let { CautionBanner(text = it, modifier = Modifier.padding(top = 12.dp)) }
 
         RecommendationBox(
             recommendation = place.recommendation,

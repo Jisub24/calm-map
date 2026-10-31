@@ -8,7 +8,7 @@ package com.calmmap.ui.model
  *
  * 대신 두 가지를 준다.
  *   ① 주변 지역 혼잡 — 장소가 아니라 지역 값이라는 것을 분명히 적는다
- *   ② 측정 요청 버튼 — 정보가 없는 곳에서 보호자가 할 수 있는 일
+ *   ② 측정 요청 버튼 — 정보가 없는 곳에서 보호자가 할 수 있는 일 (요청 수는 measurement_requests)
  */
 data class NoDataUi(
     val areaName: String,
@@ -17,7 +17,6 @@ data class NoDataUi(
     val forecast: List<AreaHour>,
     val reviewGood: Int,
     val reviewHard: Int,
-    val requestCount: Int,
 ) {
     val reviewTotal: Int get() = reviewGood + reviewHard
 }
@@ -36,7 +35,6 @@ val sampleParkNoData = NoDataUi(
     ),
     reviewGood = 2,
     reviewHard = 1,
-    requestCount = 4,
 )
 
 /** 장소 번호로 정보 부족 화면 자료를 찾는다. 없으면 null */

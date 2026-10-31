@@ -16,11 +16,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import com.calmmap.data.AuthRepository
 import com.calmmap.data.MeasurementRepository
+import com.calmmap.data.MeasurementRequestRepository
+import com.calmmap.data.MyDataRepository
 import com.calmmap.data.PlaceDetailRepository
 import com.calmmap.data.PlaceRepository
 import com.calmmap.data.ProfileRepository
 import com.calmmap.data.VisitRepository
 import com.calmmap.data.brief
+import com.calmmap.ui.component.ButtonVariant
+import com.calmmap.ui.component.ConfirmDialog
 import com.calmmap.ui.component.LoginRequiredSheet
 import com.calmmap.ui.component.MainTab
 import com.calmmap.ui.detail.NoDataScreen
@@ -35,12 +39,18 @@ import com.calmmap.ui.map.PlaceConfirmScreen
 import com.calmmap.ui.model.MEASURE_NOW_ONLY
 import com.calmmap.ui.model.TimeSlot
 import com.calmmap.ui.model.VisitPlan
+import com.calmmap.ui.model.VisitFeeling
 import com.calmmap.ui.model.VisitUi
 import com.calmmap.ui.model.visitDayOf
 import com.calmmap.ui.model.PlaceDetailUi
+import com.calmmap.ui.model.RaiseSuggestion
+import com.calmmap.ui.model.josa
+import com.calmmap.ui.model.raiseSuggestion
 import com.calmmap.ui.model.sampleNoDataFor
 import com.calmmap.ui.mypage.AccountScreen
 import com.calmmap.ui.mypage.DataInfoScreen
+import com.calmmap.ui.mypage.MeasuredPlaceUi
+import com.calmmap.ui.mypage.MeasuredPlacesScreen
 import com.calmmap.ui.onboarding.ChildProfileScreen
 import com.calmmap.ui.onboarding.SensoryFactor
 import com.calmmap.ui.onboarding.Sensitivity
@@ -55,14 +65,16 @@ import com.calmmap.ui.visit.VisitCardScreen
 import com.calmmap.ui.visit.VisitTimeScreen
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.format.TextStyle
+import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /** 지금 보여줄 화면 */
 private enum class Screen {
     MAP, SEARCH, DETAIL, HISTORY, ME, DATA_INFO,
-    // 내 정보 안: 프로필 수정 · 우리 아이 수정 · 계정 관리
-    CHILD_EDIT, ACCOUNT,
+    // 내 정보 안: 우리 아이 수정 · 계정 관리 · 내가 측정한 장소
+    CHILD_EDIT, ACCOUNT, MY_MEASURED,
     // 방문 계획 흐름
     //   계획할 때: 시간 선택 → 지도 (방문 예정 띠가 생김)
     //   갈 때: 방문 예정 띠 → 미리 보는 카드 → (아이와 보기) → 현장 모드 → 방문 후 기록
@@ -140,16 +152,43 @@ fun CalmMapApp(
     val scope = rememberCoroutineScope()
     // 카카오 프로필 이름. 로그인이 바뀌면 다시 읽는다
     val nickname = remember(isGuest) { AuthRepository.displayName() ?: "보호자" }
-    // 저장된 우리 아이 설정. null 이면 아직 못 읽은 것
-    var sensitivities by remember { mutableStateOf<Map<SensoryFactor, Sensitivity>?>(null) }
+    // 저장된 우리 아이 설정. null 이면 아직 못 읽은 것. 로그인이 바뀌면 다시 읽는다
+    var sensitivities by remember(isGuest) { mutableStateOf<Map<SensoryFactor, Sensitivity>?>(null) }
     var savingChild by remember { mutableStateOf(false) }
+    // 우리 아이 맞춤을 켰는지. 지도 칩과 장소 상세 '모두 기준 / 우리 아이 맞춤' 이 같이 쓴다
+    var personalized by remember(isGuest) { mutableStateOf(false) }
+    val child = sensitivities.orEmpty()
+    // 우리 아이 설정에서 뒤로 가면 돌아갈 곳 (내 정보, 또는 맞춤을 켜려다 설정이 없어 온 화면)
+    var childEditFrom by remember { mutableStateOf(Screen.ME) }
     val context = LocalContext.current
     // DB 에서 읽은 장소들. null 이면 아직 못 읽은 것
     var mapPlaces by remember { mutableStateOf<PlaceRepository.MapPlaces?>(null) }
-    // 검색 · 측정 장소 고르기가 쓰는 지금 기준 목록
-    val places = mapPlaces?.now
     // 지도 시간 선택에서 고른 때. null 이면 지금. 상세에 다녀와도 그대로 둔다
     var mapSlot by remember { mutableStateOf<TimeSlot?>(null) }
+
+    // 화면에 보낼 장소 값. 맞춤을 켰으면 맞춤 값으로 바꾼다. 상세는 바꾸기 전 값을 들고 있다가 그릴 때 바꾼다
+    fun shown(place: PlaceUi): PlaceUi = if (personalized) place.personalized() else place.unpersonalized()
+    // 지도 마커 · 목록. 같은 때 · 설정 · 맞춤이면 같은 목록이라 마커를 다시 그리지 않는다
+    val mapList = remember(mapPlaces, mapSlot, child, personalized) { mapPlaces?.at(mapSlot, child).orEmpty().map(::shown) }
+    // 검색 · 측정 장소 고르기가 쓰는 지금 기준 목록
+    val places = remember(mapPlaces, child, personalized) { mapPlaces?.at(null, child)?.map(::shown) }
+
+    // 내가 측정한 장소. null 이면 아직 못 읽은 것
+    var myMeasured by remember(isGuest) { mutableStateOf<List<MeasurementRepository.Mine>?>(null) }
+    var myMeasuredFailed by remember { mutableStateOf(false) }
+    // 내 정보 · 내가 측정한 장소 · 계정 관리에 들어올 때마다 새로 읽는다. 읽는 동안은 이전 값을 둔다
+    LaunchedEffect(isGuest, screen == Screen.ME || screen == Screen.MY_MEASURED || screen == Screen.ACCOUNT) {
+        if (isGuest || (screen != Screen.ME && screen != Screen.MY_MEASURED && screen != Screen.ACCOUNT)) return@LaunchedEffect
+        myMeasuredFailed = false
+        try {
+            myMeasured = MeasurementRepository.mine()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("CalmMap", "내가 측정한 장소 불러오기 실패: ${e.brief()}")
+            myMeasuredFailed = true
+        }
+    }
     // 지도로 올 때마다 새로 읽는다. 앱을 켜 둔 채 시간이 지나거나 batch 가 점수를 새로 써도 옛 값이 남지 않게.
     // 읽는 동안은 이전 목록을 그대로 보여주고, 실패하면 이전 목록을 둔 채 오래된 정보라고 알린다
     LaunchedEffect(screen == Screen.MAP) {
@@ -203,9 +242,10 @@ fun CalmMapApp(
     }
     // 설정을 읽다가 실패했는지. '불러오는 중' 대신 실패 안내를 띄운다
     var childLoadFailed by remember { mutableStateOf(false) }
-    // 내 정보에 들어왔는데 아직 못 읽었으면 읽는다. 실패하면 다음에 들어올 때 다시 읽는다
+    // 로그인하면 바로 읽는다. 지도의 우리 아이 맞춤이 이 값을 쓴다.
+    // 실패하면 내 정보에 들어올 때 다시 읽는다
     LaunchedEffect(isGuest, screen == Screen.ME) {
-        if (isGuest || screen != Screen.ME || sensitivities != null) return@LaunchedEffect
+        if (isGuest || sensitivities != null) return@LaunchedEffect
         childLoadFailed = false
         sensitivities = try {
             // 줄이 없으면 아무것도 고르지 않은 것과 같다
@@ -287,10 +327,84 @@ fun CalmMapApp(
         screen = if (place == null) Screen.MEASURE_PLACE else Screen.MEASURE_RUN
     }
 
+    // 맞춤을 끄고 켜도 같은 장소를 그대로 보여줄 수 있게 바꾸기 전 값을 들고 간다
     fun openDetail(place: PlaceUi) {
-        detailPlace = place
+        detailPlace = place.unpersonalized()
         screen = Screen.DETAIL
     }
+
+    /**
+     * 우리 아이 맞춤 켜기 · 끄기. 지도 칩과 상세 '모두 기준 / 우리 아이 맞춤' 이 같이 쓴다.
+     * 로그인 안 했으면 로그인 안내, 민감 · 매우로 고른 자극이 없으면 우리 아이 설정으로 보낸다
+     */
+    fun setPersonalized(on: Boolean) {
+        if (!on) {
+            personalized = false
+            return
+        }
+        if (isGuest) {
+            loginSheet = true
+            return
+        }
+        val chosen = sensitivities
+        if (chosen == null) {
+            Toast.makeText(context, "우리 아이 설정을 불러오는 중이에요. 잠시 뒤 다시 눌러 주세요", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (chosen.values.none { it != Sensitivity.Normal }) {
+            Toast.makeText(context, "아이가 힘들어하는 자극을 먼저 골라 주세요", Toast.LENGTH_SHORT).show()
+            childEditFrom = screen
+            screen = Screen.CHILD_EDIT
+            return
+        }
+        personalized = true
+    }
+
+    // 측정 요청 수와 내가 요청한 장소. 로그인해야 읽을 수 있어서 둘러보기 중이면 null 로 둔다
+    var requests by remember(isGuest) { mutableStateOf<MeasurementRequestRepository.Requests?>(null) }
+    var requesting by remember { mutableStateOf(false) }
+    // 검색 · 상세(정보 부족)에 들어올 때마다 새로 읽는다. 다른 보호자가 요청한 수도 반영되게
+    LaunchedEffect(isGuest, screen == Screen.SEARCH || screen == Screen.DETAIL) {
+        if (isGuest || (screen != Screen.SEARCH && screen != Screen.DETAIL)) return@LaunchedEffect
+        try {
+            requests = MeasurementRequestRepository.load()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("CalmMap", "측정 요청 불러오기 실패: ${e.brief()}")
+        }
+    }
+
+    // 정보가 없는 장소에 측정을 요청한다. 이미 요청했으면 취소한다. DB 에 쓴 뒤에 버튼 · 수가 바뀐다
+    fun toggleRequest(place: PlaceUi) {
+        if (isGuest) {
+            loginSheet = true
+            return
+        }
+        if (requesting) return
+        val cancel = requests?.mine?.contains(place.id) == true
+        scope.launch {
+            requesting = true
+            try {
+                if (cancel) MeasurementRequestRepository.cancel(place.id) else MeasurementRequestRepository.request(place.id)
+                requests = MeasurementRequestRepository.load()
+                val message = if (cancel) "측정 요청을 취소했어요" else "측정을 요청했어요. 요청이 많은 곳부터 측정해요"
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("CalmMap", "측정 요청 ${if (cancel) "취소" else "저장"} 실패: ${e.brief()}")
+                val message = if (cancel) "취소하지 못했어요" else "요청하지 못했어요"
+                Toast.makeText(context, "$message. 인터넷 연결을 확인해 주세요", Toast.LENGTH_SHORT).show()
+            }
+            requesting = false
+        }
+    }
+
+    // 방문 기록으로 우리 아이 설정을 올리자는 제안. 기록을 저장한 뒤 지도 위에 확인 창으로 띄운다
+    var raise by remember { mutableStateOf<RaiseSuggestion?>(null) }
+    // 내 데이터 모두 삭제 중
+    var deletingData by remember { mutableStateOf(false) }
 
     // 하단 탭을 누르면 그 탭의 첫 화면으로
     fun selectTab(tab: MainTab) {
@@ -305,7 +419,8 @@ fun CalmMapApp(
     // 이게 없으면 앱이 그냥 꺼져서 사용자가 보다 말고 튕긴 것처럼 느낀다
     BackHandler(enabled = screen != Screen.MAP) {
         screen = when (screen) {
-            Screen.DATA_INFO, Screen.CHILD_EDIT, Screen.ACCOUNT -> Screen.ME
+            Screen.DATA_INFO, Screen.ACCOUNT, Screen.MY_MEASURED -> Screen.ME
+            Screen.CHILD_EDIT -> childEditFrom
             Screen.VISIT_PLANS -> plansFrom
             Screen.VISIT_TIME -> visitFrom
             Screen.VISIT_CARD -> cardFrom
@@ -322,9 +437,11 @@ fun CalmMapApp(
     Box {
         when (screen) {
             Screen.MAP -> MapScreen(
-                places = mapPlaces?.at(mapSlot).orEmpty(),
+                places = mapList,
                 slot = mapSlot,
                 onSlotChange = { mapSlot = it },
+                personalized = personalized,
+                onPersonalizeClick = { setPersonalized(!personalized) },
                 onSearchClick = { screen = Screen.SEARCH },
                 onPlaceClick = { openDetail(it) },
                 onTabSelect = { selectTab(it) },
@@ -347,6 +464,9 @@ fun CalmMapApp(
                 onMeasureClick = { openConfirm(it) },
                 query = searchQuery,
                 onQueryChange = { searchQuery = it },
+                requestCounts = requests?.counts.orEmpty(),
+                requested = requests?.mine.orEmpty(),
+                onRequestClick = { toggleRequest(it) },
             )
 
             Screen.HISTORY -> VisitHistoryScreen(
@@ -376,22 +496,46 @@ fun CalmMapApp(
                 sensitivities = sensitivities,
                 sensitivitiesFailed = childLoadFailed,
                 onLoginClick = onLoginClick,
-                onChildEditClick = { screen = Screen.CHILD_EDIT },
+                onChildEditClick = {
+                    childEditFrom = Screen.ME
+                    screen = Screen.CHILD_EDIT
+                },
                 onAccountClick = { screen = Screen.ACCOUNT },
+                measuredCount = myMeasured?.size,
+                onMeasuredClick = { screen = Screen.MY_MEASURED },
             )
+
+            Screen.MY_MEASURED -> {
+                val byId = places.orEmpty().associateBy { it.id }
+                MeasuredPlacesScreen(
+                    // 지도에 없는 장소(지워진 곳)는 상세를 열 수 없어서 뺀다
+                    places = myMeasured?.mapNotNull { mine ->
+                        val place = byId[mine.placeId] ?: return@mapNotNull null
+                        val at = mine.lastAt
+                        val week = at.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.KOREAN)
+                        MeasuredPlaceUi(place, mine.count, "${at.monthValue}/${at.dayOfMonth} ($week) ${"%02d:%02d".format(at.hour, at.minute)}")
+                    },
+                    failed = myMeasuredFailed,
+                    onBack = { screen = Screen.ME },
+                    onPlaceClick = { openDetail(it) },
+                )
+            }
 
             Screen.CHILD_EDIT -> ChildProfileScreen(
                 initial = sensitivities.orEmpty(),
                 confirmText = "저장",
-                onBack = { screen = Screen.ME },
-                // 저장이 끝나야 내 정보로. 실패하면 이 화면에 남는다
+                onBack = { screen = childEditFrom },
+                // 저장이 끝나야 들어온 곳으로. 실패하면 이 화면에 남는다
                 onStart = { values ->
                     scope.launch {
                         savingChild = true
                         try {
                             ProfileRepository.save(values)
                             sensitivities = values
-                            screen = Screen.ME
+                            val chosen = values.values.any { it != Sensitivity.Normal }
+                            // 맞춤을 켜려다 왔으면 고른 뒤 바로 켠다. 모두 보통으로 바꿨으면 끈다
+                            if (!chosen) personalized = false else if (childEditFrom != Screen.ME) personalized = true
+                            screen = childEditFrom
                         } catch (e: Exception) {
                             Log.e("CalmMap", "우리 아이 설정 저장 실패: ${e.brief()}")
                             Toast.makeText(context, "저장하지 못했어요. 다시 시도해 주세요", Toast.LENGTH_SHORT).show()
@@ -405,18 +549,56 @@ fun CalmMapApp(
             Screen.ACCOUNT -> AccountScreen(
                 onBack = { screen = Screen.ME },
                 onLogout = onLogout,
-                // TODO: 서버에서 계정과 데이터를 지우는 함수(Edge Function)가 생기면 붙인다
+                // DB 함수(028)가 데이터와 계정을 지운 뒤 로그아웃한다. 측정은 익명으로 남는다
                 onWithdraw = {
-                    Toast.makeText(context, "회원 탈퇴는 아직 준비 중이에요", Toast.LENGTH_SHORT).show()
+                    scope.launch {
+                        try {
+                            MyDataRepository.deleteAccount()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("CalmMap", "회원 탈퇴 실패: ${e.brief()}")
+                            Toast.makeText(context, "탈퇴하지 못했어요. 인터넷 연결을 확인해 주세요", Toast.LENGTH_SHORT).show()
+                            return@launch
+                        }
+                        Toast.makeText(context, "탈퇴했어요", Toast.LENGTH_SHORT).show()
+                        onLogout()
+                    }
                 },
                 joinedAt = AuthRepository.joinedAt() ?: "-",
                 visitCount = visits?.size ?: 0,
+                measuredCount = myMeasured?.size ?: 0,
+                childCount = if (sensitivities?.values?.any { it != Sensitivity.Normal } == true) 1 else 0,
             )
 
-            // TODO: 삭제는 확인 창을 띄운 뒤 Supabase 데이터와 계정을 지운다
             Screen.DATA_INFO -> DataInfoScreen(
                 onBack = { screen = Screen.ME },
-                onDeleteAllClick = {},
+                canDelete = !isGuest,
+                deleting = deletingData,
+                // 방문 기록 · 우리 아이 설정 · 측정 요청을 지우고 측정은 익명으로 남긴다 (028). 앱에 들고 있던 것도 비운다
+                onDeleteAllClick = {
+                    scope.launch {
+                        deletingData = true
+                        try {
+                            MyDataRepository.deleteAll()
+                            visits = emptyList()
+                            visitPlans.clear()
+                            activePlan = null
+                            sensitivities = emptyMap()
+                            personalized = false
+                            myMeasured = emptyList()
+                            // 측정 요청도 지워졌다. 다음에 검색 · 상세에 들어오면 다시 읽는다
+                            requests = null
+                            Toast.makeText(context, "내 데이터를 모두 지웠어요", Toast.LENGTH_SHORT).show()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("CalmMap", "내 데이터 삭제 실패: ${e.brief()}")
+                            Toast.makeText(context, "지우지 못했어요. 인터넷 연결을 확인해 주세요", Toast.LENGTH_SHORT).show()
+                        }
+                        deletingData = false
+                    }
+                },
             )
 
             Screen.VISIT_TIME -> {
@@ -492,6 +674,18 @@ fun CalmMapApp(
                                     visitedOn = plan.day.date,
                                 ),
                             ) + visits.orEmpty()
+                            // 같은 자극이 힘들었던 방문이 쌓였으면 우리 아이 설정을 올릴지 묻는다.
+                            // 세다가 실패해도 기록은 이미 저장됐으니 묻지 않고 넘어간다
+                            if (feeling == VisitFeeling.HARD && sensitivities != null) {
+                                raise = try {
+                                    raiseSuggestion(triggers, VisitRepository.hardCounts(), child)
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    Log.w("CalmMap", "힘들었던 방문 세기 실패: ${e.brief()}")
+                                    null
+                                }
+                            }
                             finishPlan(plan)
                         },
                         // 기록 없이 넘기면 예정을 지운다. 결과 없는 줄은 기록 탭 · 학습 어디에도 쓰이지 않는다
@@ -589,33 +783,71 @@ fun CalmMapApp(
                     // 그 날 점수가 한 칸도 없는 장소만 점수를 내지 않는 화면으로 보낸다.
                     // 고른 시각만 비어 있으면 상세를 연다. 그 날 다른 시각을 시간대별 탭에서 볼 수 있다
                     !place.hasForecast -> NoDataScreen(
-                        place = place,
+                        place = shown(place),
                         info = noData,
                         onBack = { screen = Screen.MAP },
                         onMeasureClick = { startMeasure(place) },
                         // 지도는 '지금' 그대로 두고 상세만 그 묶음 기록으로 연다
                         onOtherRecordClick = { slot ->
-                            mapPlaces?.at(slot)?.firstOrNull { it.id == place.id }?.let { openDetail(it) }
+                            mapPlaces?.at(slot, child)?.firstOrNull { it.id == place.id }?.let { openDetail(it) }
                         },
                         detail = detail,
                         detailFailed = detailFailed,
                         onRetry = { detailRetry++ },
+                        requestCount = requests?.let { it.counts[place.id] ?: 0 },
+                        requested = requests?.mine?.contains(place.id) == true,
+                        onRequestClick = { toggleRequest(place) },
+                        requesting = requesting,
                     )
 
                     else -> PlaceDetailScreen(
-                        place = place,
+                        place = shown(place),
                         detail = detail,
                         detailFailed = detailFailed,
                         onRetry = { detailRetry++ },
                         nowHour = nowHour,
                         onBack = { screen = Screen.MAP },
                         onMeasureClick = { startMeasure(place) },
-                        onVisitClick = { startVisit(place) },
-                        canPersonalize = !isGuest,
-                        onLoginNeeded = { loginSheet = true },
+                        onVisitClick = { startVisit(shown(place)) },
+                        personalized = personalized,
+                        onPersonalizeChange = { setPersonalized(it) },
                     )
                 }
             }
+        }
+
+        // 방문 기록으로 쌓인 자극을 우리 아이 설정에 올릴지. 보호자가 '올리기' 를 눌러야 바뀐다
+        raise?.let { s ->
+            val name = s.factor.label
+            // "사람 많음을 '민감'으로" · "갑작스러운 소리를 '매우'로"
+            val change = "$name${josa(name, "을", "를")} '${s.to.label}'${josa(s.to.label, "으로", "로")}"
+            ConfirmDialog(
+                title = "$name 때문에 힘들었던 방문이 ${s.count}번이에요",
+                body = "우리 아이 설정에서 $change 올릴까요? " + when (s.to) {
+                    Sensitivity.Very -> "올리면 이 자극이 관측된 곳 · 시간에 '주의'를 따로 알려드려요."
+                    else -> "올리면 이 자극이 보통 이상인 시간을 무던함으로 안내하지 않아요."
+                },
+                confirmText = "올리기",
+                dismissText = "괜찮아요",
+                confirmVariant = ButtonVariant.Primary,
+                onConfirm = {
+                    raise = null
+                    val updated = child + (s.factor to s.to)
+                    scope.launch {
+                        try {
+                            ProfileRepository.save(updated)
+                            sensitivities = updated
+                            Toast.makeText(context, "$change 올렸어요", Toast.LENGTH_SHORT).show()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("CalmMap", "우리 아이 설정 올리기 실패: ${e.brief()}")
+                            Toast.makeText(context, "저장하지 못했어요. 내 정보 > 우리 아이에서 직접 바꿀 수 있어요", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                onDismiss = { raise = null },
+            )
         }
 
         if (loginSheet) {

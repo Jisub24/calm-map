@@ -46,7 +46,40 @@ data class PlaceUi(
     val kakao: KakaoPlace? = null,
     /** 지금 보는 묶음(평일 · 주말)에는 측정이 없고 다른 묶음에만 있을 때 그 기록. 정보 부족 화면에서 "주말 기록 보기" */
     val otherRecord: OtherRecord? = null,
+    /** 우리 아이 맞춤으로 바꾼 값. 우리 아이 설정에서 민감 · 매우로 고른 자극이 없으면 null */
+    val fit: ChildFit? = null,
+    /** 맞춤 값으로 바꿔 보여주는 중이면 바꾸기 전 값. 상세에서 '모두 기준' 으로 돌아갈 때 쓴다 */
+    val base: PlaceUi? = null,
 ) {
+    /** 우리 아이 맞춤 값으로 보여주는 중인지 */
+    val personal: Boolean get() = base != null
+
+    /** 지도 마커 · 목록에 '주의' 를 붙일지. 맞춤을 켰을 때만 */
+    val cautionMark: Boolean get() = personal && fit?.cautionNow == true
+
+    /** 카드 · 상세의 주의 상자 문구. 맞춤을 켰을 때만 */
+    val caution: String? get() = if (personal) fit?.warning else null
+
+    /**
+     * 우리 아이 맞춤을 켰을 때 보여줄 값. 단계 · 목록 설명 · 그래프 · 권고 문구가 맞춤 기준으로 바뀌고,
+     * 권고 문구 아래 줄은 바뀐 이유가 된다. 고른 자극이 없으면 그대로
+     */
+    fun personalized(): PlaceUi {
+        if (base != null) return this
+        val f = fit ?: return this
+        return copy(
+            level = f.level,
+            description = f.description,
+            recommendation = f.recommendation,
+            recommendationBasis = f.reason,
+            hours = f.hours,
+            base = this,
+        )
+    }
+
+    /** 맞춤을 끈 값 */
+    fun unpersonalized(): PlaceUi = base ?: this
+
     /** 그 날 점수가 한 칸이라도 있는지. 없으면 카드 대신 정보 부족 화면으로 보낸다 */
     val hasForecast: Boolean
         get() = hours.any { it.level != null }
@@ -62,6 +95,26 @@ data class PlaceUi(
             add(openNow?.let { if (it) "영업 중" else "영업 종료" } ?: "영업시간 정보 없음")
         }.joinToString(" · ")
 }
+
+/**
+ * 우리 아이 맞춤으로 바꾼 장소 값. PlaceRepository 가 장소를 읽을 때 같이 만든다.
+ * 점수에 가중치를 곱하지 않는다 (답변서1 질의1, 곱해서 섞으면 한 자극이 다른 자극에 가려진다). 두 가지만 한다
+ *
+ *   '매우' 로 고른 자극이 관측되면          단계는 그대로 두고 '주의' 를 따로 알린다
+ *   '민감' · '매우' 로 고른 자극이 보통 이상  그 시간을 '무던함' 으로 안내하지 않는다 (보통으로)
+ */
+data class ChildFit(
+    val level: SensoryLevel,
+    val description: String,
+    val recommendation: String,
+    val hours: List<HourBar>,
+    /** 바뀐 이유. "우리 아이 설정의 사람 많음 때문에 14~15시를 무던함에서 뺐어요" */
+    val reason: String,
+    /** 주의 상자 문구. '매우' 로 고른 자극이 관측됐을 때만 */
+    val warning: String?,
+    /** 지도 마커 기준 시각(지금 · 고른 시각)에 주의인지. 마커에 '주의' 를 붙인다 */
+    val cautionNow: Boolean,
+)
 
 /**
  * 다른 묶음(평일 · 주말)에 잰 기록. 평일과 주말은 붐비는 정도가 달라서 그 값을 이쪽 점수로 쓰지 않고 따로 보여준다.

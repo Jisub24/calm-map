@@ -135,8 +135,11 @@ fun MapScreen(
     /** 시간 선택에서 고른 때. null 이면 지금. [places] 는 이미 이 때 기준으로 만든 것이다 */
     slot: TimeSlot? = null,
     onSlotChange: (TimeSlot?) -> Unit = {},
+    /** 우리 아이 맞춤을 켰는지. 켜져 있으면 [places] 는 이미 맞춤 값으로 바꾼 것이다 (장소 상세와 같은 상태) */
+    personalized: Boolean = false,
+    /** '우리 아이 맞춤' 칩을 눌렀을 때. 로그인 · 우리 아이 설정 확인은 부르는 쪽에서 */
+    onPersonalizeClick: () -> Unit = {},
 ) {
-    var personalized by remember { mutableStateOf(false) }
     // 장소를 고르면 아래 시트가 그 장소 카드로 바뀐다
     var selectedPlace by remember { mutableStateOf<PlaceUi?>(null) }
     var listOpen by remember { mutableStateOf(false) }
@@ -212,7 +215,7 @@ fun MapScreen(
                         FilterChip(
                             label = "우리 아이 맞춤",
                             selected = personalized,
-                            onClick = { personalized = !personalized },
+                            onClick = onPersonalizeClick,
                         )
                     }
                     if (visitPlan != null) {
@@ -539,11 +542,13 @@ private fun NaverMapHost(
 
     // 마커에 장소 이름이 들어가서 장소마다 한 장씩 만든다. 목록이 바뀔 때만 다시 만든다
     val icons = remember(places, density) {
-        places.associate { it.id to markerBitmap(it.level, it.name, density, typeface = markerFont) }
+        places.associate { it.id to markerBitmap(it.level, it.name, density, typeface = markerFont, caution = it.cautionMark) }
     }
     // 고른 장소는 진한 바탕으로 바꿔 어느 것을 눌렀는지 보이게 한다
     val selectedIcons = remember(places, density) {
-        places.associate { it.id to markerBitmap(it.level, it.name, density, selected = true, typeface = markerFont) }
+        places.associate {
+            it.id to markerBitmap(it.level, it.name, density, selected = true, typeface = markerFont, caution = it.cautionMark)
+        }
     }
 
     NaverMapView(

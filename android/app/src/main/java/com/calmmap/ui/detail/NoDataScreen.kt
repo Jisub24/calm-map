@@ -38,7 +38,6 @@ import com.calmmap.ui.component.PrimaryButton
 import com.calmmap.ui.component.SecondaryButton
 import com.calmmap.ui.component.TopBar
 import com.calmmap.ui.component.outlineBorder
-import com.calmmap.ui.model.MEASURE_NOW_ONLY
 import com.calmmap.ui.model.PlaceDetailUi
 import com.calmmap.ui.model.NoDataUi
 import com.calmmap.ui.model.PlaceUi
@@ -92,8 +91,15 @@ fun NoDataScreen(
     detail: PlaceDetailUi? = null,
     detailFailed: Boolean = false,
     onRetry: () -> Unit = {},
+    /** 이 장소의 측정 요청 수 (measurement_requests). 로그인 전이거나 아직 못 읽었으면 null */
+    requestCount: Int? = null,
+    /** 내가 이미 요청했는지. 그러면 버튼이 '요청 취소' 가 된다 */
+    requested: Boolean = false,
+    /** '측정 요청하기' · '요청 취소'. 로그인 확인 · 저장은 부르는 쪽에서 */
+    onRequestClick: () -> Unit = {},
+    /** 요청을 저장하는 중. 버튼을 막아 두 번 누르지 않게 */
+    requesting: Boolean = false,
 ) {
-    var requested by remember { mutableStateOf(false) }
     val other = place.otherRecord
     var tab by remember(place.id, place.slot) { mutableStateOf(NoDataTab.AREA) }
 
@@ -119,8 +125,11 @@ fun NoDataScreen(
                     color = TextTertiary,
                     modifier = Modifier.weight(1f),
                 )
-                LevelBadge(level = place.level)
+                LevelBadge(level = place.level, prefix = if (place.personal) "우리 아이 기준 ·" else null)
             }
+
+            // 점수가 없어도 소리 종류 · 밝기는 장소 고유값이라 우리 아이 맞춤의 주의는 알린다
+            place.caution?.let { CautionBanner(text = it) }
 
             // 모르는 것은 모른다고: 점선 테두리 카드
             Column(
@@ -185,9 +194,13 @@ fun NoDataScreen(
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     CalmIcon(CalmIcons.Users, size = 20.dp, tint = BrandPrimaryPressed)
-                    val requests = (info?.requestCount ?: 0) + if (requested) 1 else 0
                     Text(
-                        text = if (requests == 0) "아직 측정 요청이 없어요" else "지금 ${requests}명이 측정을 요청했어요",
+                        text = when {
+                            // 요청 수는 로그인해야 읽을 수 있다 (014 RLS)
+                            requestCount == null -> "측정을 요청할 수 있어요"
+                            requestCount == 0 -> "아직 측정 요청이 없어요"
+                            else -> "지금 ${requestCount}명이 측정을 요청했어요"
+                        },
                         style = MaterialTheme.typography.labelLarge,
                         color = BrandPrimaryPressed,
                     )
@@ -205,16 +218,25 @@ fun NoDataScreen(
                 val measureLocked = place.slot != null
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SecondaryButton(text = "직접 측정하기", onClick = onMeasureClick, enabled = !measureLocked, size = ButtonSize.M, modifier = Modifier.weight(1f))
-                    // TODO: measurement_requests 에 저장
-                    PrimaryButton(
-                        text = if (requested) "요청했어요" else "측정 요청하기",
-                        onClick = { requested = true },
-                        enabled = !requested,
-                        size = ButtonSize.M,
-                        modifier = Modifier.weight(1f),
-                    )
+                    // 요청한 뒤에는 취소할 수 있다. 취소는 되돌리는 일이라 흰 버튼
+                    if (requested) {
+                        SecondaryButton(
+                            text = "요청 취소",
+                            onClick = onRequestClick,
+                            enabled = !requesting,
+                            size = ButtonSize.M,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        PrimaryButton(
+                            text = "측정 요청하기",
+                            onClick = onRequestClick,
+                            enabled = !requesting,
+                            size = ButtonSize.M,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
-                if (measureLocked) Text(text = MEASURE_NOW_ONLY, style = MaterialTheme.typography.caption, color = TextTertiary)
             }
         }
     }
@@ -245,7 +267,6 @@ private fun AreaTab(place: PlaceUi, info: NoDataUi?) {
         return
     }
 
-    // TODO: visits · measurement_requests 를 연결하면 DB 장소에도 후기 · 요청 수가 보인다
     AreaCongestionCard(info)
     WhiteCard {
         Text(text = "보호자 후기 ${info.reviewTotal}건", style = MaterialTheme.typography.titleMedium, color = TextPrimary)

@@ -78,6 +78,9 @@ fun MyPageScreen(
     onLoginClick: () -> Unit = {},
     onChildEditClick: () -> Unit = {},
     onAccountClick: () -> Unit = {},
+    /** 내가 측정한 장소 수. null 이면 아직 못 읽은 것이라 숫자를 빼고 보여준다 */
+    measuredCount: Int? = null,
+    onMeasuredClick: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -133,11 +136,9 @@ fun MyPageScreen(
                     .background(BgSurface)
                     .padding(horizontal = 16.dp),
             ) {
+                // 알림 기능은 없어서 '알림 설정' 줄을 두지 않는다
                 if (!isGuest) {
-                    // TODO: 측정 기록이 저장되면 개수와 목록을 붙인다
-                    MenuRow(CalmIcons.Pin, "내가 측정한 장소", trailing = "3곳", onClick = {})
-                    // TODO: 알림 기능이 생기면 연결
-                    MenuRow(CalmIcons.Bell, "알림 설정", onClick = {})
+                    MenuRow(CalmIcons.Pin, "내가 측정한 장소", trailing = measuredCount?.let { "${it}곳" }, onClick = onMeasuredClick)
                 }
                 MenuRow(CalmIcons.Lock, "데이터·개인정보 안내", onClick = onDataInfoClick)
                 // TODO: 사업장 웹 주소가 정해지면 브라우저로 연다
