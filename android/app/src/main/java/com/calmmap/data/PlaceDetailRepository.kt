@@ -2,6 +2,10 @@ package com.calmmap.data
 
 import android.util.Log
 import com.calmmap.ui.model.CalmHours
+import com.calmmap.ui.model.DayHours
+import com.calmmap.ui.model.clockShort
+import com.calmmap.ui.model.openHoursLines
+import com.calmmap.ui.model.weekdaysLabel
 import com.calmmap.ui.model.LightInfo
 import com.calmmap.ui.model.PlaceDetailUi
 import com.calmmap.ui.model.PlaceUi
@@ -30,7 +34,7 @@ import kotlin.math.roundToInt
  *
  * 밝기 · 배경음악 · 안내방송 빈도는 장소 고유값이라 시간대로 나누지 않는다 (답변서2 질의1).
  * 시간대마다 달라지는 점수는 점수 탭이 hourly_forecast 의 칸에서 읽는다.
- *   사업장 business_calm_hours — 가게가 등록한 조용한 시간
+ *   사업장 business_calm_hours — 가게가 등록한 무던한 시간 + place_hours — 요일별 영업시간
  *
  * 024 뷰가 아직 없으면 소리 · 빛 탭은 "아직 측정이 없어요" 로 보이고 나머지는 정상이다.
  */
@@ -68,7 +72,7 @@ object PlaceDetailRepository {
     @Serializable
     private data class CommercialCategoryRow(val mid_ctgr: String, val level: Int, val level_text: String)
 
-    /** 가게가 등록한 조용한 시간 한 줄. 시각은 "10:00:00" */
+    /** 가게가 등록한 무던한 시간 한 줄. 시각은 "10:00:00" */
     @Serializable
     private data class CalmHourRow(
         val weekday: Int,
@@ -76,6 +80,15 @@ object PlaceDetailRepository {
         val end_time: String,
         val actions: List<String>? = null,
         val custom_action: String? = null,
+    )
+
+    @Serializable
+    private data class HoursRow(
+        val weekday: Int,
+        val is_closed: Boolean,
+        val open_time: String? = null,
+        val close_time: String? = null,
+        val closes_next_day: Boolean = false,
     )
 
     @Serializable
@@ -131,6 +144,13 @@ object PlaceDetailRepository {
                     order("weekday", Order.ASCENDING)
                 }
                 .decodeList<CalmHourRow>()
+        }
+        val openHours = async {
+            supabase.from("place_hours")
+                .select(Columns.list("weekday", "is_closed", "open_time", "close_time", "closes_next_day")) {
+                    filter { eq("place_id", place.id) }
+                }
+                .decodeList<HoursRow>()
         }
         // 요약 뷰(024)가 아직 없을 수 있다. 그때는 빈 값으로 두고 나머지 탭은 그린다
         val sounds = async {
@@ -191,6 +211,9 @@ object PlaceDetailRepository {
             measureCount = m?.measurement_count ?: soundRows.maxOfOrNull { it.measurement_count },
             light = lightOf(rows, m),
             calmHours = calmHoursOf(calmHours.await()),
+            openHours = openHoursLines(
+                openHours.await().map { DayHours(it.weekday, it.is_closed, it.open_time, it.close_time, it.closes_next_day) },
+            ),
         )
     }
 
@@ -331,8 +354,8 @@ object PlaceDetailRepository {
         if (rows.isEmpty()) return null
         val groups = rows.groupBy { Triple(it.start_time, it.end_time, it.actions.orEmpty() + listOfNotNull(it.custom_action)) }
         val hours = groups.entries.joinToString("\n") { (key, list) ->
-            val days = list.map { it.weekday }.distinct().sorted().joinToString(" · ") { WEEKDAYS[it - 1] }
-            "$days ${clock(key.first)}~${clock(key.second)}시"
+            // 사업장 웹 미리보기와 같은 글자. "화 · 목 10~12시" · "월–금 10~12시"
+            "${weekdaysLabel(list.map { it.weekday })} ${clockShort(key.first)}~${clockShort(key.second)}시"
         }
         val actions = rows.flatMap { it.actions.orEmpty().map { a -> ACTION_WORDS[a] ?: a } + listOfNotNull(it.custom_action) }
             .distinct()
@@ -342,19 +365,12 @@ object PlaceDetailRepository {
         )
     }
 
-    /** "10:00:00" → "10", "10:30:00" → "10:30" */
-    private fun clock(time: String): String {
-        val (h, min) = time.split(":")
-        return if (min == "00") h.trimStart('0').ifEmpty { "0" } else "${h.trimStart('0').ifEmpty { "0" }}:$min"
-    }
-
     // ── 말 바꾸기 ──────────────────────────────────────────
 
     private fun crowdWord(level: Int): String = CROWD_WORDS.getOrElse(level) { "잘 모름" }
 
     private fun fmt(x: Double): String = if (x == x.roundToInt().toDouble()) "${x.roundToInt()}" else "%.1f".format(x)
 
-    private val WEEKDAYS = listOf("월", "화", "수", "목", "금", "토", "일")
     private val AREA_WORDS = listOf("여유", "보통", "약간 붐빔", "붐빔")
     private val CROWD_WORDS = listOf("한가함", "보통", "붐빔", "매우 붐빔")
     private val ACTION_WORDS = mapOf("music_off" to "음악 끔", "light_down" to "조명 낮춤", "announcement_min" to "방송 최소")

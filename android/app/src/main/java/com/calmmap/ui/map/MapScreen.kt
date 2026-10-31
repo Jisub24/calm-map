@@ -542,12 +542,12 @@ private fun NaverMapHost(
 
     // 마커에 장소 이름이 들어가서 장소마다 한 장씩 만든다. 목록이 바뀔 때만 다시 만든다
     val icons = remember(places, density) {
-        places.associate { it.id to markerBitmap(it.level, it.name, density, typeface = markerFont, caution = it.cautionMark) }
+        places.associate { it.id to markerBitmap(it.level, it.name, density, typeface = markerFont, caution = it.cautionMark, calmNow = it.calmNow) }
     }
     // 고른 장소는 진한 바탕으로 바꿔 어느 것을 눌렀는지 보이게 한다
     val selectedIcons = remember(places, density) {
         places.associate {
-            it.id to markerBitmap(it.level, it.name, density, selected = true, typeface = markerFont, caution = it.cautionMark)
+            it.id to markerBitmap(it.level, it.name, density, selected = true, typeface = markerFont, caution = it.cautionMark, calmNow = it.calmNow)
         }
     }
 

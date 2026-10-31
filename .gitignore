@@ -6,6 +6,9 @@ CLAUDE.md
 .env
 .env.*
 !.env.example
+# 사업장 웹 키. config.example.js 를 복사해서 쓴다. 배포 때는 GitHub 비밀값으로 만든다
+business-web/config.js
+business-web/dist/
 local.properties
 *.keystore
 *.jks

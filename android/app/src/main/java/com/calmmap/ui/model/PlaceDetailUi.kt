@@ -18,6 +18,8 @@ data class PlaceDetailUi(
     val measureCount: Int? = null,
     val light: LightInfo? = null,
     val calmHours: CalmHours? = null,
+    /** 요일별 영업시간. 등록된 영업시간이 없으면 빈 목록 */
+    val openHours: List<OpenHoursLine> = emptyList(),
 )
 
 /** 종합 지수를 어떻게 냈는지 */
@@ -71,7 +73,7 @@ data class LightInfo(
     val report: String? = null,
 )
 
-/** 사업장이 등록한 조용한 시간. 점수에는 넣지 않고 따로 보여준다 */
+/** 사업장이 등록한 무던한 시간. 점수에는 넣지 않고 따로 보여준다 */
 data class CalmHours(
     val businessHours: String?,
     val businessActions: String?,

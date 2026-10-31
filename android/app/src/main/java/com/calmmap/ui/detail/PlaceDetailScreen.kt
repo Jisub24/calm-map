@@ -649,13 +649,14 @@ private fun LightTile(
 
 // ── 사업장 ──────────────────────────────────────────────
 
+/** 사업장이 등록한 무던한 시간 + 요일별 영업시간. 정보 부족 화면의 '사업장' 탭도 쓴다 */
 @Composable
-private fun BusinessCard(detail: PlaceDetailUi) {
+internal fun BusinessCard(detail: PlaceDetailUi) {
     val calm = detail.calmHours
     DetailCard {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             CalmIcon(CalmIcons.Store, size = 18.dp, tint = TextSecondary)
-            Text(text = "사업장이 등록한 조용한 시간", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+            Text(text = "사업장이 등록한 무던한 시간", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
         }
         if (calm?.businessHours == null) {
             Text(text = "아직 사업장이 등록한 시간이 없어요", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
@@ -663,7 +664,7 @@ private fun BusinessCard(detail: PlaceDetailUi) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(text = "매주", style = MaterialTheme.typography.caption, color = TextTertiary)
                 Text(text = calm.businessHours, style = MaterialTheme.typography.headlineSmall, color = BrandPrimary)
-                Text(text = "이 시간에 사업장이 하는 것", style = MaterialTheme.typography.caption, color = TextTertiary)
+                Text(text = "이렇게 운영해요", style = MaterialTheme.typography.caption, color = TextTertiary)
             }
             calm.businessActions?.let { actions ->
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -673,10 +674,28 @@ private fun BusinessCard(detail: PlaceDetailUi) {
                 }
             }
             Text(
-                text = "방문 권고는 관측으로 확인된 시간을 먼저 써요. 등록만으로 점수를 낮추지 않아요.",
+                text = "방문 권고는 관측으로 확인된 시간을 먼저 써요.",
                 style = MaterialTheme.typography.caption,
                 color = TextTertiary,
             )
+        }
+
+        Box(Modifier.fillMaxWidth().height(1.dp).background(BorderDefault))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            CalmIcon(CalmIcons.Clock, size = 18.dp, tint = TextSecondary)
+            Text(text = "영업시간", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+        }
+        if (detail.openHours.isEmpty()) {
+            Text(text = "등록된 영업시간이 없어요", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                detail.openHours.forEach { line ->
+                    Row {
+                        Text(text = line.days, style = MaterialTheme.typography.labelLarge, color = TextPrimary, modifier = Modifier.width(72.dp))
+                        Text(text = line.time, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                    }
+                }
+            }
         }
     }
 }
