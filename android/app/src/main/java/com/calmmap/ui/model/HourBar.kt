@@ -20,4 +20,6 @@ data class HourBar(
     val level: SensoryLevel?,
     val ratio: Float,
     val estimated: Boolean = false,
+    /** 영업하지 않는 시간 (place_hours). 정보 부족과 다르게 그린다 */
+    val closed: Boolean = false,
 )

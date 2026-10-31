@@ -67,6 +67,7 @@ private enum class NoDataTab(val label: String) {
     AREA("주변 혼잡"),
     SOUND("소리"),
     LIGHT("빛"),
+    BUSINESS("사업장"),
 }
 
 /**
@@ -74,8 +75,9 @@ private enum class NoDataTab(val label: String) {
  *
  * 종합 점수를 내지 않는다. 소리 · 빛이 비면 실제 최댓값을 알 수 없어서,
  * 혼잡만으로 점수를 내면 부담을 낮게 잘못 안내하게 된다.
- * 대신 탭으로 ① 주변 지역 혼잡 ② 소리 ③ 빛 을 보여준다. 소리 · 빛은 평일 · 주말 상관없는 장소 고유값만
- * (답변서2 질의1). 측정 요청 · 직접 측정 카드는 어느 탭이든 아래에 둔다.
+ * 대신 탭으로 ① 주변 지역 혼잡 ② 소리 ③ 빛 ④ 사업장 을 보여준다. 소리 · 빛은 평일 · 주말 상관없는 장소 고유값만
+ * (답변서2 질의1). 사업장은 장소 상세와 같은 카드 — 사업장 웹으로 새로 들어온 가게는 대개 측정이 없어서 여기서 보게 된다.
+ * 측정 요청 · 직접 측정 카드는 어느 탭이든 아래에 둔다.
  */
 @Composable
 fun NoDataScreen(
@@ -180,7 +182,8 @@ fun NoDataScreen(
                     info = "안내방송 · 배경 음악은 평일 · 주말 상관없이 이 장소에서 잰 모든 측정으로 보여드려요. " +
                         "말소리 · 돌발 소리는 시간마다 달라서 그 시간대 기록에서 보여드려요.",
                 )
-                else -> LightCard(detail.light)
+                tab == NoDataTab.LIGHT -> LightCard(detail.light)
+                else -> BusinessCard(detail)
             }
 
             // 측정 요청 카드 (연한 파랑). 어느 탭이든 보이게 탭 내용 아래에 둔다

@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,9 +22,8 @@ import com.calmmap.ui.component.CalmLogo
 import com.calmmap.ui.theme.BrandOnPrimary
 import com.calmmap.ui.theme.BrandPrimary
 import com.calmmap.ui.theme.CalmMapTheme
-import com.calmmap.ui.theme.caption
 
-// 최종안 01 스플래시: 파란 바탕 가운데에 로고 · 앱 이름 · 한 줄 소개, 아래에 출품 표시
+// 최종안 01 스플래시: 파란 바탕 가운데에 로고 · 앱 이름
 @Composable
 fun SplashScreen(modifier: Modifier = Modifier) {
     // 파란 바탕이라 상태바 글자(시계 · 배터리)를 흰색으로. 화면을 떠나면 원래대로
@@ -54,18 +52,7 @@ fun SplashScreen(modifier: Modifier = Modifier) {
         ) {
             CalmLogo(size = 80.dp, tile = BrandOnPrimary)
             Text(text = "무던한 지도", style = MaterialTheme.typography.displayLarge, color = BrandOnPrimary)
-            Text(
-                text = "오늘, 무던한 시간에 나가요",
-                style = MaterialTheme.typography.bodyLarge,
-                color = BrandOnPrimary.copy(alpha = 0.8f),
-            )
         }
-        Text(
-            text = "2026 AI 라이프 솔루션 챌린지",
-            style = MaterialTheme.typography.caption,
-            color = BrandOnPrimary.copy(alpha = 0.6f),
-            modifier = Modifier.padding(bottom = 28.dp),
-        )
     }
 }
 

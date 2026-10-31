@@ -27,8 +27,10 @@ data class PlaceUi(
     val recommendationBasis: String,
     /** 오늘 영업시간을 1시간 단위로. 비어 있으면 그래프를 그리지 않는다 */
     val hours: List<HourBar> = emptyList(),
-    /** 사업장 웹에서 등록한 무던한 시간. 없으면 null. 점수에는 넣지 않는다 */
+    /** 사업장 웹에서 등록한 무던한 시간. "화 · 목 10~12시 무던한 시간 운영". 없으면 null. 점수에는 넣지 않는다 */
     val businessNote: String? = null,
+    /** 지금이 사업장이 등록한 무던한 시간인지. 지도 마커에 '무던한 시간' 을 붙인다 (지금 기준일 때만) */
+    val calmNow: Boolean = false,
     /** 오늘 8~22시 주변 지역 혼잡 1(여유)~4(붐빔). 서울시 예측이 없는 시각은 null. 비어 있으면 예시 값으로 그린다 */
     val areaCrowd: List<Int?> = emptyList(),
     /** 이 장소에 쌓인 직접 측정 횟수 (hourly_forecast.measurement_count 합). 3회부터 확정 단계 */

@@ -6,7 +6,9 @@ import com.calmmap.ui.model.HourBar
 import com.calmmap.ui.model.OtherRecord
 import com.calmmap.ui.model.PlaceUi
 import com.calmmap.ui.model.TimeSlot
+import com.calmmap.ui.model.clockShort
 import com.calmmap.ui.model.josa
+import com.calmmap.ui.model.weekdaysLabel
 import com.calmmap.ui.onboarding.Sensitivity
 import com.calmmap.ui.onboarding.SensoryFactor
 import com.calmmap.ui.theme.SensoryLevel
@@ -87,6 +89,17 @@ object PlaceRepository {
         val score_crowd: Float? = null,
         val score_loudness: Float? = null,
         val score_light: Float? = null,
+    )
+
+    /** 사업장 웹에서 등록한 무던한 시간 (business_calm_hours). 시각은 "10:00:00" */
+    @Serializable
+    private data class CalmRow(
+        val place_id: Long,
+        val weekday: Int,
+        val start_time: String,
+        val end_time: String,
+        val actions: List<String>? = null,
+        val custom_action: String? = null,
     )
 
     /** place_sound_summary 한 줄. heard_count 는 028 부터 있다 */
@@ -181,8 +194,17 @@ object PlaceRepository {
                     .decodeList<MeasureRow>()
             }.onFailure { Log.w("CalmMap", "측정 요약 읽기 실패: ${it.brief()}") }.getOrElse { emptyList() }
         }
+        // 사업장이 등록한 무던한 시간. 못 읽어도 지도는 뜨고 표시만 빠진다
+        val calm = async {
+            runCatching {
+                supabase.from("business_calm_hours")
+                    .select(Columns.list("place_id", "weekday", "start_time", "end_time", "actions", "custom_action"))
+                    .decodeList<CalmRow>()
+            }.onFailure { Log.w("CalmMap", "사업장 무던한 시간 읽기 실패: ${it.brief()}") }.getOrElse { emptyList() }
+        }
         val placeRows = places.await()
         val hoursByPlace = hours.await().groupBy { it.place_id }
+        val calmByPlace = calm.await().groupBy { it.place_id }
         val todayByPlace = forecast.await().groupBy { it.place_id }
         // 평일/주말 → 장소 → 그 묶음 줄들
         val slotsByGroup = slots.await().groupBy { it.day_group }.mapValues { (_, rows) -> rows.groupBy { it.place_id } }
@@ -196,7 +218,7 @@ object PlaceRepository {
             placeRows.map { row ->
                 placeUi(
                     row, byPlace[row.id].orEmpty(), hoursByPlace[row.id], now, slot, otherByPlace[row.id].orEmpty(), otherWeekend,
-                    child, factsByPlace[row.id],
+                    child, factsByPlace[row.id], calmByPlace[row.id].orEmpty(),
                 )
             }
         }
@@ -211,7 +233,8 @@ object PlaceRepository {
      */
     private fun placeUi(
         row: PlaceRow,
-        rows: List<ForecastRow>,
+        /** 그때(오늘 · 고른 묶음)의 점수 줄. 영업하지 않는 시각 줄은 아래에서 뺀다 */
+        allRows: List<ForecastRow>,
         hours: List<HoursRow>?,
         now: ZonedDateTime,
         slot: TimeSlot?,
@@ -221,7 +244,11 @@ object PlaceRepository {
         /** 우리 아이 설정. 민감 · 매우로 고른 자극이 있으면 맞춤 값(fit)을 같이 만든다 */
         child: Map<SensoryFactor, Sensitivity>,
         facts: PlaceFacts?,
+        calm: List<CalmRow>,
     ): PlaceUi {
+        // 사업장이 영업시간을 넣으면 batch 가 다시 돌기 전에도 그 시각은 그래프에서 '영업 안 함' 으로 뺀다
+        val closed = closedHours(hours, now, slot)
+        val rows = allRows.filter { it.hour !in closed }
         val byHour = rows.associateBy { it.hour }
         val known = rows.any { it.status != "insufficient" }
         val otherRecord = otherRecordOf(known, other, otherWeekend, slot?.hour ?: now.hour)
@@ -249,21 +276,32 @@ object PlaceRepository {
                 other = otherRecord,
             )
         }
+        val dayWord = when {
+            slot == null -> "오늘은"
+            slot.weekend -> "주말에는"
+            else -> "평일에는"
+        }
+        // 영업시간을 아는데 그때 하루 종일 닫혀 있으면 정보 부족이 아니라 쉬는 날
+        val restDay = closed.containsAll(CHART_HOURS.toList())
         // 무던함에서 뺄 시각을 받아 결론 문구를 만든다. 맞춤이 아니면 뺄 시각이 없다
         val recommendWithout = { blocked: Set<Int> ->
-            // 이쪽 묶음엔 측정이 없고 반대쪽에만 있으면 그걸 먼저 알린다 (지도 카드 · 정보 부족 화면)
-            otherRecord?.let { "${it.emptyGroupLabel}에 잰 기록은 아직 없어요" } ?: recommend(
-                byHour = byHour,
-                nowHour = if (slot == null) now.hour else null,
-                dayWord = when {
-                    slot == null -> "오늘은"
-                    slot.weekend -> "주말에는"
-                    else -> "평일에는"
-                },
-                blocked = blocked,
-            )
+            when {
+                restDay -> "$dayWord 쉬는 날이에요"
+                // 이쪽 묶음엔 측정이 없고 반대쪽에만 있으면 그걸 먼저 알린다 (지도 카드 · 정보 부족 화면)
+                otherRecord != null -> "${otherRecord.emptyGroupLabel}에 잰 기록은 아직 없어요"
+                else -> recommend(
+                    byHour = byHour,
+                    nowHour = if (slot == null) now.hour else null,
+                    dayWord = dayWord,
+                    blocked = blocked,
+                )
+            }
         }
-        val bars = if (rows.isEmpty()) emptyList() else CHART_HOURS.map { bar(it, byHour[it]) }
+        val bars = if (rows.isEmpty()) emptyList() else CHART_HOURS.map { if (it in closed) HourBar(it, null, 0f, closed = true) else bar(it, byHour[it]) }
+        val calmNow = slot == null && calm.any { c ->
+            val minute = now.hour * 60 + now.minute
+            c.weekday == now.dayOfWeek.value && minute >= (minutesOf(c.start_time) ?: 0) && minute < (minutesOf(c.end_time) ?: 0)
+        }
         return PlaceUi(
             id = row.id,
             name = row.name,
@@ -274,9 +312,15 @@ object PlaceRepository {
             walkMinutes = null,
             openNow = hours?.let { isOpen(it, openAt) },
             recommendation = recommendWithout(emptySet()),
-            recommendationBasis = otherRecord?.let { "${it.slot.groupLabel}에는 ${it.count}번 쟀어요 · 상세 보기에서 ${it.slot.groupLabel} 기록을 볼 수 있어요" }
-                ?: basis(rows, measured, known),
+            recommendationBasis = when {
+                restDay -> "등록된 영업시간 기준이에요"
+                otherRecord != null ->
+                    "${otherRecord.slot.groupLabel}에는 ${otherRecord.count}번 쟀어요 · 상세 보기에서 ${otherRecord.slot.groupLabel} 기록을 볼 수 있어요"
+                else -> basis(rows, measured, known)
+            },
             hours = bars,
+            businessNote = businessNoteOf(calm, calmNow),
+            calmNow = calmNow,
             areaCrowd = if (rows.isEmpty()) emptyList() else CHART_HOURS.map { byHour[it]?.area_crowd_level },
             measureCount = measured,
             slot = slot,
@@ -532,6 +576,43 @@ object PlaceRepository {
     }
 
     // ── 영업시간 ──────────────────────────────────────────
+
+    /** place_hours 한 줄 → 여는 시각들. batch forecast.open_hours 와 같은 규칙 (09:00~22:30 이면 9~22시) */
+    private fun openHours(r: HoursRow?): Set<Int> {
+        if (r == null || r.is_closed) return emptySet()
+        val open = minutesOf(r.open_time) ?: return emptySet()
+        val close = r.close_time ?: return emptySet()
+        // 자정을 넘기거나 24시까지 하면 그날 23시까지
+        val last = if (r.closes_next_day || close.startsWith("24:")) 23 else (minutesOf(close) ?: return emptySet()).let { if (it % 60 > 0) it / 60 else it / 60 - 1 }
+        return (open / 60..last).toSet()
+    }
+
+    /**
+     * 그래프에서 '영업 안 함' 으로 그릴 시각. 영업시간을 모르는 장소는 비운다 (batch 가 8~22시로 계산한다).
+     * 지금은 오늘 요일, 고른 때는 그 묶음 요일 중 하루라도 여는 시각을 연 것으로 본다 (batch group_hours 와 같다)
+     */
+    private fun closedHours(hours: List<HoursRow>?, now: ZonedDateTime, slot: TimeSlot?): Set<Int> {
+        if (hours.isNullOrEmpty()) return emptySet()
+        val days = if (slot == null) listOf(now.dayOfWeek.value) else if (slot.weekend) listOf(6, 7) else (1..5).toList()
+        val open = days.flatMap { d -> openHours(hours.find { it.weekday == d }) }.toSet()
+        return CHART_HOURS.filterNot { it in open }.toSet()
+    }
+
+    /**
+     * 장소 카드의 사업장 한 줄. 사업장 웹 미리보기와 같은 글자.
+     *   지금이 그 시간이면  "지금 무던한 시간 운영 중"
+     *   아니면              "화 · 목 10~12시 무던한 시간 운영" (여러 묶음이면 "외 N")
+     */
+    private fun businessNoteOf(calm: List<CalmRow>, calmNow: Boolean): String? {
+        if (calm.isEmpty()) return null
+        if (calmNow) return "지금 무던한 시간 운영 중"
+        val groups = calm.groupBy { Triple(it.start_time, it.end_time, it.actions.orEmpty().sorted() + listOfNotNull(it.custom_action)) }
+            .values
+            .sortedWith(compareBy({ g -> g.minOf { it.weekday } }, { g -> minutesOf(g.first().start_time) ?: 0 }))
+        val first = groups.first()
+        val label = "${weekdaysLabel(first.map { it.weekday })} ${clockShort(first[0].start_time)}~${clockShort(first[0].end_time)}시 무던한 시간 운영"
+        return if (groups.size > 1) "$label 외 ${groups.size - 1}" else label
+    }
 
     /** 지금 영업 중인지. 오늘 영업시간과, 어제 자정을 넘겨 아직 안 닫은 경우를 같이 본다 */
     private fun isOpen(rows: List<HoursRow>, now: LocalDateTime): Boolean {

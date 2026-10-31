@@ -73,6 +73,7 @@ import kotlin.math.roundToInt
  *   실측      채워서 그림
  *   추정      점선 테두리, 채우지 않음
  *   정보 없음  높이가 같은 빈 막대에 물음표
+ *   영업 안 함 바닥의 얇은 선 (사업장 영업시간)
  *
  * 따로 만들면 한쪽만 고치고 다른 쪽을 빠뜨린다.
  * 낮게 잘못 안내하는 오류가 거기서 나온다.
@@ -182,6 +183,17 @@ private fun BarSlot(
         // 아예 비워두면 누를 수 있다는 것을 알 수 없다.
         // 모든 빈 시간이 같은 높이라 "값이 아니라 자리 표시" 라는 게 드러난다.
         val level = bar.level
+        // 영업하지 않는 시간은 바닥에 얇은 선만. 정보가 없는 게 아니라 문을 닫은 것이라 물음표를 쓰지 않는다
+        if (bar.closed) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(if (isSelected) 4.dp else 2.dp)
+                    .clip(shape)
+                    .background(if (isSelected) TextPrimary else BorderStrong),
+            )
+            return@Column
+        }
         if (level == null) {
             Box(
                 modifier = Modifier
@@ -287,7 +299,7 @@ private fun Tooltip(
                     .padding(horizontal = 10.dp, vertical = 6.dp),
             ) {
                 Text(
-                    text = "${bar.hour}시 · ${bar.level?.label ?: "정보 없음"}",
+                    text = "${bar.hour}시 · ${barWord(bar)}",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = BgSurface,
@@ -318,8 +330,15 @@ private fun Tooltip(
 /** 큰 그래프 막대 위 빈 자리. 말풍선 두 줄 + 꼬리가 들어가는 높이 */
 private val TooltipRoom = 46.dp
 
+/** 말풍선의 단계 글자 */
+private fun barWord(bar: HourBar): String = when {
+    bar.closed -> "영업 안 함"
+    else -> bar.level?.label ?: "정보 없음"
+}
+
 /** 그 시간 값이 어디서 왔는지 */
 private fun sourceLabel(bar: HourBar): String = when {
+    bar.closed -> "가게가 문을 열지 않는 시간이에요"
     bar.level == null -> "아직 아무 정보도 없는 시간이에요"
     bar.estimated -> "측정이 부족해 추정한 값이에요"
     else -> "직접 측정한 시간이에요"
@@ -334,7 +353,7 @@ fun SelectedHourNote(bar: HourBar, modifier: Modifier = Modifier) {
     Text(
         text = buildAnnotatedString {
             withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = TextPrimary)) {
-                append("${bar.hour}시 · ${bar.level?.label ?: "정보 없음"}")
+                append("${bar.hour}시 · ${barWord(bar)}")
             }
             append(" · ${sourceLabel(bar)}")
         },
@@ -437,6 +456,12 @@ fun ChartLegend(modifier: Modifier = Modifier, bars: List<HourBar> = emptyList()
                 Text(text = "?", fontSize = 9.sp, color = TextTertiary)
             }
             Text(text = "정보 부족", style = MaterialTheme.typography.caption, color = TextSecondary)
+        }
+        if (bars.any { it.closed }) {
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(width = 12.dp, height = 2.dp).background(BorderStrong, shape))
+                Text(text = "영업 안 함", style = MaterialTheme.typography.caption, color = TextSecondary)
+            }
         }
     }
 }

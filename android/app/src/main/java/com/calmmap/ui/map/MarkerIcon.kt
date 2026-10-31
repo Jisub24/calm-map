@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.calmmap.ui.theme.BgSurface
+import com.calmmap.ui.theme.BrandPrimary
 import com.calmmap.ui.theme.BorderStrong
 import com.calmmap.ui.theme.LevelCalm
 import com.calmmap.ui.theme.LevelCalmEdge
@@ -33,6 +34,7 @@ import com.calmmap.ui.theme.TextTertiary
  *   정보 부족   흰 바탕 + 회색 테두리 · 이름 회색 · " · 정보 부족"
  *   선택       진한 바탕 · 이름 13 흰색 · 조금 더 크게
  *   주의       이름 뒤에 '주의' 꼬리표 (우리 아이 맞춤에서 '매우' 로 고른 자극이 관측됐을 때)
+ *   무던한 시간 이름 뒤에 '무던한 시간' 꼬리표 (지금이 사업장이 등록한 무던한 시간일 때)
  *
  * 네이버 지도 마커는 Compose 로 그릴 수 없고 비트맵을 받는다. 그래서 여기서 직접 그린다.
  * 점 모양은 component/LevelGlyph(Dot) 와 같은 규칙이다.
@@ -50,6 +52,8 @@ fun markerBitmap(
     typeface: Typeface = Typeface.DEFAULT_BOLD,
     // 우리 아이 맞춤에서 '매우' 로 고른 자극이 관측됐으면 이름 뒤에 '주의' 를 붙인다. 단계 점은 그대로
     caution: Boolean = false,
+    // 지금이 사업장이 등록한 무던한 시간이면 이름 뒤에 '무던한 시간'. 점수와는 따로다
+    calmNow: Boolean = false,
 ): MarkerImage = with(density) {
     // 상호 앞부분만 쓴다. "스타벅스 홍대역8번출구점" 처럼 길면 알약이 옆 마커를 덮는다.
     // 단계는 글자가 아니라 점 모양으로 읽는다 (하단 범례). 전체 이름은 카드 · 상세에 나온다
@@ -79,7 +83,13 @@ fun markerBitmap(
         color = BgSurface.toArgb()
     }
     val tagPadH = 5.dp.toPx()
-    val tagW = if (caution) gap + tagPadH * 2 + tagPaint.measureText(CAUTION) else 0f
+    // 이름 뒤 꼬리표. 사업장 무던한 시간(파랑) → 우리 아이 맞춤 주의(갈색) 순서
+    val tags = listOfNotNull(
+        if (calmNow) CALM_NOW to BrandPrimary else null,
+        if (caution) CAUTION to StatusCaution else null,
+    )
+    val tagWidths = tags.map { (text, _) -> tagPadH * 2 + tagPaint.measureText(text) }
+    val tagW = tagWidths.sumOf { (gap + it).toDouble() }.toFloat()
     val pillW = padL + dot + gap + textPaint.measureText(label) + tagW + padR
     val pillH = padV * 2 + maxOf(dot, textH)
 
@@ -115,20 +125,23 @@ fun markerBitmap(
     val baseline = cy - (textPaint.fontMetrics.ascent + textPaint.fontMetrics.descent) / 2
     canvas.drawText(label, cx + dot / 2 + gap, baseline, textPaint)
 
-    // '주의' 꼬리표. 이름 오른쪽, 주의 색 바탕에 흰 글자
-    if (caution) {
-        val left = cx + dot / 2 + gap + textPaint.measureText(label) + gap
-        val tagH = 16.dp.toPx()
-        val tag = RectF(left, cy - tagH / 2, left + tagW - gap, cy + tagH / 2)
-        canvas.drawRoundRect(tag, 4.dp.toPx(), 4.dp.toPx(), fill(StatusCaution))
-        val tagBase = cy - (tagPaint.fontMetrics.ascent + tagPaint.fontMetrics.descent) / 2
-        canvas.drawText(CAUTION, tag.left + tagPadH, tagBase, tagPaint)
+    // 꼬리표. 이름 오른쪽에 차례로, 색 바탕에 흰 글자
+    val tagH = 16.dp.toPx()
+    val tagBase = cy - (tagPaint.fontMetrics.ascent + tagPaint.fontMetrics.descent) / 2
+    var left = cx + dot / 2 + gap + textPaint.measureText(label)
+    tags.forEachIndexed { i, (text, color) ->
+        left += gap
+        val tag = RectF(left, cy - tagH / 2, left + tagWidths[i], cy + tagH / 2)
+        canvas.drawRoundRect(tag, 4.dp.toPx(), 4.dp.toPx(), fill(color))
+        canvas.drawText(text, tag.left + tagPadH, tagBase, tagPaint)
+        left += tagWidths[i]
     }
 
     MarkerImage(bitmap, cx / bitmap.width, cy / bitmap.height)
 }
 
 private const val CAUTION = "주의"
+private const val CALM_NOW = "무던한 시간"
 
 private fun drawLevelDot(canvas: Canvas, level: SensoryLevel, cx: Float, cy: Float, dot: Float, ring: Float) {
     when (level) {
