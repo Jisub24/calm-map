@@ -219,7 +219,7 @@ object PlaceDetailRepository {
 
     // ── 점수 탭 ────────────────────────────────────────────
 
-    /** 지금 시각 칸. 정보 부족이면 가장 가까운 점수 있는 시각 (지도 마커와 같은 규칙) */
+    /** 지금 시각 칸. 정보 부족이면 가장 가까운 점수 있는 시각. 카드 제목에 "15시는" 처럼 몇 시 값인지 적는다 */
     private fun nowRow(rows: List<ForecastRow>, nowHour: Int): ForecastRow? {
         val scored = rows.filter { it.status != "insufficient" && it.total_score != null }
         return scored.firstOrNull { it.hour == nowHour } ?: scored.minByOrNull { abs(it.hour - nowHour) }

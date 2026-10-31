@@ -228,7 +228,7 @@ object PlaceRepository {
 
     /**
      * 장소 하나를 화면 값으로 바꾼다.
-     *   지금([slot] 이 null)   오늘 줄. 지금 시각 칸이 비어 있으면 가장 가까운 시각의 단계 · 후보
+     *   지금([slot] 이 null)   오늘 줄. 지금 시각 칸만. 비어 있으면 정보 부족
      *   고른 때               slot_forecast 줄. 그 시각 칸만. 비어 있으면 정보 부족 (다른 시각 값을 그 시각처럼 보이지 않게)
      */
     private fun placeUi(
@@ -252,16 +252,9 @@ object PlaceRepository {
         val byHour = rows.associateBy { it.hour }
         val known = rows.any { it.status != "insufficient" }
         val otherRecord = otherRecordOf(known, other, otherWeekend, slot?.hour ?: now.hour)
-        val pickedRow = if (slot != null) {
-            byHour[slot.hour]
-        } else {
-            // 지금 시각에 단계 · 후보가 있으면 그것. 없으면(정보 부족 · 영업 전후) 가장 가까운 시각의 단계 · 후보로.
-            // 측정한 시각이 하나라도 있는 장소를 지도에서 정보 부족으로 보이게 하지 않으려는 것
-            val known = rows.filter { it.status != "insufficient" }
-            byHour[now.hour]?.takeIf { it.status != "insufficient" }
-                ?: known.minByOrNull { kotlin.math.abs(it.hour - now.hour) }
-                ?: byHour[now.hour]
-        }
+        // 그 시각 칸만 본다. 비어 있으면 정보 부족. 다른 시각 값을 끌어오면 마커에 몇 시 값인지 안 보여서
+        // 지금 잰 것처럼 보이고, 문 닫은 시각에도 앞 시각 단계가 뜬다
+        val pickedRow = byHour[slot?.hour ?: now.hour]
         val level = levelOf(pickedRow)
         val measured = rows.sumOf { it.measurement_count }
         // 영업 중인지도 그때 기준으로. 고른 때는 그 묶음의 가장 가까운 날 그 시각 30분으로 본다 (화면에 날짜는 안 나온다)
